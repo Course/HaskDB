@@ -11,8 +11,8 @@ data BlockNumber = BlockNumber Int
 data BlockData = BlockData BS.ByteString 
 type FileInformation = FH.FHandle 
 
-{-readBlock :: FileInformation -> BlockNumber -> BlockData-}
-readBlock = undefined 
+readBlock :: FileInformation -> BlockNumber -> IO a 
+readBlock = undefined  -- To be changed according to file handling api 
 
 
 data FWT a = 
@@ -53,3 +53,4 @@ readOnlyT ft fh = do
             content <- readBlock fh bn 
             trans (c content) fh 
 
+F
