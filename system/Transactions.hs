@@ -53,4 +53,3 @@ readOnlyT ft fh = do
             content <- readBlock fh bn 
             trans (c content) fh 
 
-F
