@@ -6,7 +6,7 @@ import qualified FileHandling as FH
 import Data.Maybe 
 
 ---- Some definitions to change the datatype afterwards . 
-data FileVersion = FileVersion Int  
+data FileVersion = FinalVersion Int | MidChange Int  
     deriving (Eq,Show) 
 data BlockNumber = BlockNumber Int 
 data BlockData = BlockData BS.ByteString 
@@ -24,11 +24,15 @@ changeFileVersion :: FileInformation -> FileVersion -> IO ()
 changeFileVersion = undefined 
 
 -- | FRT monad . It represents read only transactions . We have differentiated this with write operations as we can provide extra flexibility for read only transactions. They never block . 
+-- THINK 
+-- Can we combine both the monads and still provide the flexibility for read only transactions 
 data FRT a =  
     RDone a |
     forall x. RReadBlock BlockNumber (x -> FRT a)
 
 -- | Monad instance of FRT. 
+-- THINK 
+-- Make it a monad transformer 
 instance Monad FRT where 
     return = RDone
     m >>= f = case m of 
@@ -68,6 +72,8 @@ data FWT a =
     forall x . WWriteBlock BlockNumber x (FWT a)               -- Think of way to carry forward that a write is done and the new version 
 
 -- | Monad instance of FWT 
+-- THINK 
+-- Make it a monad transformer 
 instance Monad FWT where 
     return = WDone 
     m >>= f = case m of 
@@ -81,7 +87,10 @@ instance Monad FWT where
 -- How to change the versions of the file . 
 -- Multiple files read write transactions .
 readWriteT :: FWT a -> FileInformation -> IO (Maybe a)
-readWriteT ft fh = undefined  
+readWriteT ft fh = do 
+    fileversion <- getFileVersion fh 
+    return Nothing 
+
 
 
 
