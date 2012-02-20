@@ -6,7 +6,10 @@ import qualified FileHandling as FH
 import Data.Maybe 
 
 ---- Some definitions to change the datatype afterwards . 
-data FileVersion = FileVersion Int  
+-- Two types of FileVersion to distinguish whether the changes are comitted or not
+-- Or should we check the existence of a journal file to find out the status of the file
+data FileVersion = Committed Int |
+                   Uncomitted Int 
     deriving (Eq,Show) 
 data BlockNumber = BlockNumber Int 
 data BlockData = BlockData BS.ByteString 
