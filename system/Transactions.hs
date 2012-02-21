@@ -17,6 +17,8 @@ type FileInformation = FH.FHandle
 
 readBlock :: FileInformation -> BlockNumber -> IO a 
 readBlock = undefined  -- To be changed according to file handling api 
+writeBlock :: FileInformation -> BlockNumber -> a -> IO a 
+writeBlock = undefined  -- To be changed according to file handling api 
 
 -- | Reads the current file version from the disk . 
 getFileVersion :: FileInformation -> IO FileVersion 
@@ -93,6 +95,56 @@ readWriteT :: FWT a -> FileInformation -> IO (Maybe a)
 readWriteT ft fh = do 
     fileversion <- getFileVersion fh 
     return Nothing 
+    
+-- | Combining both the monads 
+-- The Bool argument denotes whether a write operation is done or not . 
+-- So if Bool is False in the end then the transaction is read only . 
+data FT a = 
+    Done a |
+    forall x . ReadBlock BlockNumber (x -> FT a) |
+    forall x . WriteBlock BlockNumber x (FT a)
+
+--  THINK if it is correct and how to define automatically in this case 
+instance Monad FT where 
+    return = Done 
+    m >>= f = case m of 
+        Done a -> f a 
+        ReadBlock bn c -> ReadBlock bn (\i -> c i  >>= f) 
+        WriteBlock bn x c -> WriteBlock bn x (c >>= f)
+
+runTransaction :: FT a -> FileInformation -> IO (Maybe a) 
+runTransaction ft fh = do 
+    fileVersion <- getFileVersion fh 
+    (output ,rw) <- trans ft fh False 
+    if rw then 
+        -- Final for read write transaction 
+        -- Operations like cleaning up journal or rollback in case of failure etc 
+        return $ Just output 
+        else do   
+                -- Only read operation in transaction 
+                newFileVersion <- getFileVersion fh  
+                if fileVersion == newFileVersion then 
+                    return $ Just output 
+                    else return Nothing 
+  where 
+    trans :: FT a -> FileInformation -> Bool -> IO (a,Bool)
+    trans (Done a) _ bool = return (a,bool) 
+    trans (ReadBlock bn c) fh bool = do 
+        val <- readBlock fh bn 
+        trans (c val) fh bool 
+    trans (WriteBlock bn x c) fh bool = do 
+        if not bool then 
+            -- This means it is the first write operation , so create a journal and all . You might want to change bool to Maybe fh , where fh can be handle to journal file .. 
+            return ()
+            else 
+            return () 
+        writeBlock fh bn x 
+        trans c fh True
+            
+
+        
+
+
 
 
 
