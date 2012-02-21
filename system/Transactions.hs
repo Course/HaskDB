@@ -9,7 +9,7 @@ import Data.Maybe
 -- Two types of FileVersion to distinguish whether the changes are comitted or not
 -- Or should we check the existence of a journal file to find out the status of the file
 data FileVersion = Committed Int |
-                   Uncomitted Int 
+                   Uncommitted Int 
     deriving (Eq,Show) 
 data BlockNumber = BlockNumber Int 
 data BlockData = BlockData BS.ByteString 
@@ -19,6 +19,7 @@ readBlock :: FileInformation -> BlockNumber -> IO a
 readBlock = undefined  -- To be changed according to file handling api 
 
 -- | Reads the current file version from the disk . 
+-- | Depends on the structure(header) of the file .
 getFileVersion :: FileInformation -> IO FileVersion 
 getFileVersion = undefined 
 
