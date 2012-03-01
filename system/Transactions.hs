@@ -13,6 +13,7 @@ data FileVersion = Committed Int |
     deriving (Eq,Show) 
 data BlockNumber = BlockNumber Int 
 data BlockData = BlockData BS.ByteString 
+data LogDescriptor = LogDescriptor 
 type FileInformation = FH.FHandle 
 
 readBlock :: FileInformation -> BlockNumber -> IO a 
@@ -97,8 +98,6 @@ readWriteT ft fh = do
     return Nothing 
     
 -- | Combining both the monads 
--- The Bool argument denotes whether a write operation is done or not . 
--- So if Bool is False in the end then the transaction is read only . 
 data FT a = 
     Done a |
     forall x . ReadBlock BlockNumber (x -> FT a) |
@@ -112,11 +111,17 @@ instance Monad FT where
         ReadBlock bn c -> ReadBlock bn (\i -> c i  >>= f) 
         WriteBlock bn x c -> WriteBlock bn x (c >>= f)
 
+newLogDescriptor :: IO LogDescriptor 
+newLogDescriptor = undefined 
+
+writeLog :: LogDescriptor -> BlockNumber -> a -> IO () 
+writeLog = undefined 
+
 runTransaction :: FT a -> FileInformation -> IO (Maybe a) 
 runTransaction ft fh = do 
     fileVersion <- getFileVersion fh 
-    (output ,rw) <- trans ft fh False 
-    if rw then 
+    (output ,rw) <- trans ft fh Nothing 
+    if not.isNothing $ rw  then 
         -- Final for read write transaction 
         -- Operations like cleaning up journal or rollback in case of failure etc 
         return $ Just output 
@@ -127,19 +132,20 @@ runTransaction ft fh = do
                     return $ Just output 
                     else return Nothing 
   where 
-    trans :: FT a -> FileInformation -> Bool -> IO (a,Bool)
-    trans (Done a) _ bool = return (a,bool) 
-    trans (ReadBlock bn c) fh bool = do 
+    trans :: FT a -> FileInformation -> Maybe LogDescriptor  -> IO (a,Maybe LogDescriptor)
+    trans (Done a) _ d = return (a,d) 
+    trans (ReadBlock bn c) fh d = do 
         val <- readBlock fh bn 
-        trans (c val) fh bool 
-    trans (WriteBlock bn x c) fh bool = do 
-        if not bool then 
+        trans (c val) fh d 
+    trans (WriteBlock bn x c) fh d = do 
+        des <- case d of 
+                    Nothing -> newLogDescriptor 
+                    Just x -> return x 
             -- This means it is the first write operation , so create a journal and all . You might want to change bool to Maybe fh , where fh can be handle to journal file .. 
-            return ()
-            else 
-            return () 
+            -- So if  it is Nothing then it means the  operations are read only , otherwise they are read write 
+        writeLog des bn x 
         writeBlock fh bn x 
-        trans c fh True
+        trans c fh (Just des)
             
 
         
