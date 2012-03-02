@@ -28,6 +28,16 @@ writeBlock fh i bs = do
     hSeek (handle fh) AbsoluteSeek $ (toInteger $ blockSize fh)*i 
     BS.hPut (handle fh) (BS.take (blockSize fh) bs) 
 
+-- | Appends a block at the end of the file 
+appendBlock :: FHandle -> BS.ByteString -> IO () 
+appendBlock fh bs = do 
+    hSeek (handle fh) SeekFromEnd 0 
+    BS.hPut (handle fh) (BS.take (blockSize fh) bs)
+
+-- | Flushes the buffer to hard disk 
+flushBuffer :: FHandle -> IO () 
+flushBuffer fh = hFlush $ handle fh 
+
 main = do 
     p <- openF "abc.b" WriteMode 1024 
     writeBlock p 0 (BSC.pack "hell no")
