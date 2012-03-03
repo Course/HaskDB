@@ -77,9 +77,7 @@ runTransaction ft fh = do
         writeLog des bn x 
         writeBlock fh bn x 
         trans c fh (Just des)
-            
 
-        
 
 
 
