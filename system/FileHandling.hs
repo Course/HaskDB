@@ -7,13 +7,14 @@ import Control.Concurrent
 import Control.Applicative
 -- | New File Handle with blocksize in Bytes stored in the Handle 
 data FHandle = FHandle {
+    filePath :: FilePath , 
     blockSize :: Int ,
     handle :: Handle
     }
 
 -- | Opens the file given path , mode and BlockSize and returns the file handle 
 openF :: FilePath -> IOMode -> Int -> IO FHandle 
-openF fp m bs = openBinaryFile fp m >>= return.FHandle bs
+openF fp m bs = openBinaryFile fp m >>= return.FHandle fp bs
 
 -- | Closes the file Handle 
 closeF :: FHandle -> IO ()
