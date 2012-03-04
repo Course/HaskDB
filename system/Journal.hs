@@ -3,8 +3,12 @@
 -- Journal is a collection of "diffs" in a particular transaction
 module Journal where
 
+import System.Directory (removeFile)
 import Data.ByteString as BS
 import qualified FileHandling as FH
+
+-- Do we need to distinguish between database handle and journal handle?
+type JHandle = FH.FHandle
 
 data Journal = Journal { jHandle :: FH.FHandle -- Handle for the Journal file
                        , dHandle :: FH.FHandle -- Handle for the database file
@@ -30,13 +34,20 @@ openJournal fp = do
                     dh <- openF "abc.db" WriteMode 1024
                     let FJournal = Journal { jHandle = jh
                                            , dHandle = dh
-                                           , jDiffs = [] --how to store the diffs in a journal
+                                           , jDiffs = readDiffsFrom jh 
                                            }
 
-
+--how to store the diffs in a journal
+readDiffsFrom :: FH.FHandle -> [Diff]
+readDiffsFrom jh = undefined
 
 -- | Remove the Journal after successful write to the database
-removeJournal = undefined
+-- | Whether to zero out the file or remove it?
+removeJournal :: Journal -> IO ()
+removeJournal j = do
+                    filetoRemove <- jHandle j
+                    -- get the FilePath of the Journal
+                    removeFile fp
 
 
 -- | Restore the data from the Journal to bring back the database into a consistent state
