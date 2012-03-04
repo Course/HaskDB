@@ -1,7 +1,10 @@
-module FileHandling where 
+module System.IO.FileHandling where 
 import System.IO
-import Data.ByteString as BS 
-import Data.ByteString.Char8 as BSC 
+import GHC.Word
+import qualified Data.ByteString as BS 
+import qualified Data.ByteString.Char8 as BSC 
+import Control.Concurrent 
+import Control.Applicative
 -- | New File Handle with blocksize in Bytes stored in the Handle 
 data FHandle = FHandle {
     blockSize :: Int ,
@@ -20,26 +23,41 @@ closeF = hClose.handle
 readBlock :: FHandle -> Integer -> IO BS.ByteString 
 readBlock fh i = do 
     hSeek (handle fh) AbsoluteSeek $ (toInteger $ blockSize fh)*i 
-    BS.hGet (handle fh) (blockSize fh) 
+    BS.filter (/=000) <$> BS.hGet (handle fh) (blockSize fh) -- filters out \NUL character . 
 
--- | Given the File Handle and block number and data to be written in ByteString , writes the given block 
+-- | Given the File Handle and block number and data to be written in ByteString , writes the given block. Adds \NUL if data is less than the block size .  
 writeBlock :: FHandle -> Integer -> BS.ByteString -> IO () 
 writeBlock fh i bs = do 
+    currentPos <- hTell (handle fh) 
     hSeek (handle fh) AbsoluteSeek $ (toInteger $ blockSize fh)*i 
-    BS.hPut (handle fh) (BS.take (blockSize fh) bs) 
+    BS.hPut (handle fh) (BS.take (blockSize fh) (BS.append bs (BS.pack (take (blockSize fh) $ cycle [000 :: GHC.Word.Word8] ))))
+    hSeek (handle fh) AbsoluteSeek currentPos             -- Necessary because concurrent use of appendBlock and writeBlock was resulting in overwriting of block next to where writeBlock was called with append block . 
 
 -- | Appends a block at the end of the file 
 appendBlock :: FHandle -> BS.ByteString -> IO () 
 appendBlock fh bs = do 
     hSeek (handle fh) SeekFromEnd 0 
-    BS.hPut (handle fh) (BS.take (blockSize fh) bs)
+    BS.hPut (handle fh) (BS.take (blockSize fh) (BS.append bs (BS.pack (take (blockSize fh) $ cycle [000 :: GHC.Word.Word8] ))))
 
 -- | Flushes the buffer to hard disk 
 flushBuffer :: FHandle -> IO () 
 flushBuffer fh = hFlush $ handle fh 
 
-main = do 
-    p <- openF "abc.b" WriteMode 1024 
-    writeBlock p 0 (BSC.pack "hell no")
+test = do 
+    c <- openF "abc.b" WriteMode 1024   -- Truncates to zero length file 
+    closeF c
+    p <- openF "abc.b" ReadWriteMode 1024 
+    forkIO $ do 
+        sequence_ $ map (\s -> appendBlock p (BSC.pack (show s))) [1..100]
+    forkIO $ do 
+        sequence_ $ map (\s -> appendBlock p (BSC.pack (show s))) [101..200]
+    appendBlock p (BSC.pack "Hello How are you" )
+    writeBlock p 0 (BSC.pack "First Block")
+    threadDelay 1000 -- To keep thread blocked and not close the handle before data is being written . 
+    flushBuffer p 
+    closeF p
+    p <- openF "abc.b" ReadMode 1024
+    x <- sequence $ map (readBlock p) [0..500]
+    print x
     closeF p
 
