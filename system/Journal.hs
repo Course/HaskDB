@@ -59,7 +59,18 @@ writeHeader j = undefined
 
 -- | Write to a journal given block number and blockData
 writeToJournal :: Journal -> Int -> BS.ByteString -> IO Journal
-writeToJournal j bn bd = undefined
+writeToJournal j bn bd = do
+                            case lookup bn (oldBlocks j) of
+                                Just _ -> return j
+                                Nothing -> val <- FH.appendBlock  (jHandle j) bd 
+                                           let newMap = insert bn val (oldBlocks j)
+                                           let fJournal = Journal { jPath = jPath j
+                                                                  , hHandle = hHandle j
+                                                                  , jHandle = jHandle j
+                                                                  , dHandle = dHandle j
+                                                                  , oldBlocks = newMap
+                                                                  }
+                                           return fJournal
 
 -- | To zero out the journal file
 resetJournal :: Journal -> IO ()
