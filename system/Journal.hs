@@ -5,6 +5,7 @@ module Journal where
 import System.IO
 import System.Random
 import Data.Map as Map
+import Data.Serialize
 import Data.ByteString as BS
 import qualified FileHandling as FH 
 
@@ -55,22 +56,30 @@ readFromJournal j bn = FH.readBlock  (jHandle j)  bn
 
 -- | Writes the header to the header file
 writeHeader :: Journal -> IO ()
-writeHeader j = undefined
+writeHeader j = do
+                  let s = encode (oldBlocks j)
+                  FH.closeF (hHandle j)
+                  h <- FH.openF (FH.filePath  (hHandle j)) WriteMode 1024 
+                  BS.hPut (FH.handle h) s
+
 
 -- | Write to a journal given block number and blockData
 writeToJournal :: Journal -> Int -> BS.ByteString -> IO Journal
 writeToJournal j bn bd = do
-                            case lookup bn (oldBlocks j) of
+                            let d = Map.lookup bn (oldBlocks j) 
+                            case d of
                                 Just _ -> return j
-                                Nothing -> val <- FH.appendBlock  (jHandle j) bd 
-                                           let newMap = insert bn val (oldBlocks j)
-                                           let fJournal = Journal { jPath = jPath j
-                                                                  , hHandle = hHandle j
-                                                                  , jHandle = jHandle j
-                                                                  , dHandle = dHandle j
-                                                                  , oldBlocks = newMap
-                                                                  }
-                                           return fJournal
+                                Nothing -> do 
+                                             val <- FH.appendBlock  (jHandle j) bd
+                                             let newMap = insert bn val (oldBlocks j)
+                                             let fJournal = Journal { jPath = jPath j
+                                                                    , hHandle = hHandle j
+                                                                    , jHandle = jHandle j
+                                                                    , dHandle = dHandle j
+                                                                    , oldBlocks = newMap
+                                                                    }
+                                             writeHeader fJournal
+                                             return fJournal
 
 -- | To zero out the journal file
 resetJournal :: Journal -> IO ()
