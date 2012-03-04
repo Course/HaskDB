@@ -35,10 +35,13 @@ writeBlock fh i bs = do
     hSeek (handle fh) AbsoluteSeek currentPos             -- Necessary because concurrent use of appendBlock and writeBlock was resulting in overwriting of block next to where writeBlock was called with append block . 
 
 -- | Appends a block at the end of the file 
-appendBlock :: FHandle -> BS.ByteString -> IO () 
+appendBlock :: FHandle -> BS.ByteString -> IO Integer 
 appendBlock fh bs = do 
     hSeek (handle fh) SeekFromEnd 0 
+    currentPos <- hTell (handle fh)
     BS.hPut (handle fh) (BS.take (blockSize fh) (BS.append bs (BS.pack (take (blockSize fh) $ cycle [000 :: GHC.Word.Word8] ))))
+    return.floor $ (fromIntegral currentPos) / (fromIntegral $ blockSize fh)
+
 
 -- | Flushes the buffer to hard disk 
 flushBuffer :: FHandle -> IO () 
@@ -60,6 +63,8 @@ test = do
         sequence_ $ map (\s -> appendBlock p (BSC.pack (show s))) [101..200]
     appendBlock p (BSC.pack "Hello How are you" )
     writeBlock p 0 (BSC.pack "First Block")
+    bs <- appendBlock p (BSC.pack "check")
+    print bs
     threadDelay 1000 -- To keep thread blocked and not close the handle before data is being written . 
     flushBuffer p 
     closeF p
