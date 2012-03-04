@@ -44,6 +44,12 @@ appendBlock fh bs = do
 flushBuffer :: FHandle -> IO () 
 flushBuffer fh = hFlush $ handle fh 
 
+-- | Zeroes out the file . 
+truncateF :: FilePath -> IO ()
+truncateF fp = do 
+    p <- openF fp WriteMode 1024 
+    closeF p 
+
 test = do 
     c <- openF "abc.b" WriteMode 1024   -- Truncates to zero length file 
     closeF c
