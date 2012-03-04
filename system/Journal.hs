@@ -4,6 +4,7 @@
 module Journal where
 import System.IO
 import System.Random
+import Data.Map as Map
 import Data.ByteString as BS
 import qualified FileHandling as FH 
 
@@ -15,7 +16,7 @@ data Journal = Journal { jPath :: FilePath -- FilePath of the journal file
                        , hHandle :: FH.FHandle -- Handle for the header file
                        , jHandle :: FH.FHandle -- Handle for the Journal file
                        , dHandle :: FH.FHandle -- Handle for the database File
-                       , oldBlocks :: [OldBlock]      -- List of oldBlocks
+                       , oldBlocks :: Map Int Int      -- List of oldBlocks
                        }
 
 -- | An oldBlock  is the "old data" that is to be replaced by the writeblock succeeding it
@@ -41,24 +42,35 @@ newJournal dh = do
                                          , hHandle = headerHandle
                                          , jHandle = journalHandle
                                          , dHandle = dh
-                                         , oldBlocks = []
+                                         , oldBlocks = Map.empty
                                          }
                   return fJournal
 
 -- | How to store old blocks in a journal
 readOldBlocksFrom :: Journal -> IO [BS.ByteString]
-readOldBlocksFrom j = do
-                        let len = Prelude.length (oldBlocks j) 
-                        Prelude.mapM (readFromJournal j)  [0..len - 1]
+readOldBlocksFrom j = undefined
 
 readFromJournal :: Journal -> Integer -> IO BS.ByteString
 readFromJournal j bn = FH.readBlock  (jHandle j)  bn
 
+-- | Writes the header to the header file
+writeHeader :: Journal -> IO ()
+writeHeader j = undefined
+
 -- | Write to a journal given block number and blockData
-writeToJournal :: Journal -> Int -> BS.ByteString -> IO ()
+writeToJournal :: Journal -> Int -> BS.ByteString -> IO Journal
 writeToJournal j bn bd = do
-                           FH.appendBlock  (jHandle j) bd -- write the block to actual file
-                           (oldBlocks j) ++ [bn]
+                            case lookup bn (oldBlocks j) of
+                                Just _ -> return j
+                                Nothing -> val <- FH.appendBlock  (jHandle j) bd 
+                                           let newMap = insert bn val (oldBlocks j)
+                                           let fJournal = Journal { jPath = jPath j
+                                                                  , hHandle = hHandle j
+                                                                  , jHandle = jHandle j
+                                                                  , dHandle = dHandle j
+                                                                  , oldBlocks = newMap
+                                                                  }
+                                           return fJournal
 
 -- | To zero out the journal file
 resetJournal :: Journal -> IO ()
