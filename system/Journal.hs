@@ -15,11 +15,11 @@ type JHandle = FH.FHandle
 type OldBlock = Integer
 type JId = String
 
-data Journal = Journal { journalID :: JId
+data Journal = Journal { journalID :: JId      -- filename prefix of the journal
                        , hHandle :: FH.FHandle -- Handle for the header file
                        , jHandle :: FH.FHandle -- Handle for the Journal file
                        , dHandle :: FH.FHandle -- Handle for the database File
-                       , oldBlocks :: Map Integer Integer      -- List of oldBlocks
+                       , oldBlocks :: Map Integer Integer -- Map from block number in database to block number of the journal
                        }
 
 -- | An oldBlock  is the "old data" that is to be replaced by the writeblock succeeding it
@@ -29,7 +29,7 @@ data Journal = Journal { journalID :: JId
                          {-}-}
 
 -- | Find existing Journals present on the disk 
-findJournals :: IO [FilePath]
+findJournals :: IO [JId]
 findJournals = undefined
 
 -- | Create a new unique Journal file
@@ -50,8 +50,8 @@ newJournal dh = do
                   return fJournal
 
 -- | Build a Journal from the journal file on disk
-readJournal :: JId -> FH.FHandle -> IO Journal
-readJournal id dh = do
+buildJournal :: JId -> FH.FHandle -> IO Journal
+buildJournal id dh = do
                       let filename = id
                       let header = filename ++ ".header"
                       let journal = filename ++ ".journal"
@@ -118,7 +118,19 @@ resetJournal = FH.truncateF . FH.filePath . jHandle
 
 -- | Replay the data from the Journal to bring back the database into a consistent
 -- state in case of a power failure
-replayJournal = undefined
+-- Read every block from the journal and write to the database 
+-- CAN DO BETTER!
+replayJournal :: Journal -> IO ()
+replayJournal j = do
+                    -- let li be the list of block numbers
+                    concatmap readAndWrite li
+                    where
+                      readAndWrite :: Integer -> IO()
+                      readAndWrite bn = do
+                                          maybebd <- readFromJournal j bn
+                                          case maybebd of 
+                                            Just bd -> writeblock (dHandle j) bn bd
+                                            Nothing -> return ()
 
 test = do 
     d <- FH.openF "abc.b" ReadWriteMode 1024   -- Truncates to zero length file 
