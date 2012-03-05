@@ -3,9 +3,12 @@
 -- Journal is a collection of "old blocks" in a particular transaction
 module Journal where
 import System.IO
+import System.Directory
 import System.Random
 import Data.Map as Map
 import Data.Serialize
+import Data.Text
+import Data.Maybe
 import Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC 
 import qualified FileHandling as FH 
@@ -29,8 +32,15 @@ data Journal = Journal { journalID :: JId      -- filename prefix of the journal
                          {-}-}
 
 -- | Find existing Journals present on the disk 
-findJournals :: IO [JId]
-findJournals = undefined
+findJournals :: FilePath -> IO [JId]
+findJournals dp = do
+    files <- getDirectoryContents dp
+    return [ id
+           | file <- files
+           , id <- maybeToList (stripSuffix (Data.Text.pack ".header") (Data.Text.pack file))
+           ]
+    -- return a list of JIds
+
 
 -- | Create a new unique Journal file
 newJournal :: FH.FHandle -> IO Journal
@@ -83,7 +93,7 @@ readFromJournal j bn = do
 writeHeader :: Journal -> IO ()
 writeHeader j = do
                   let s = encode (oldBlocks j)
-                  FH.writeAll (FH.handle $ hHandle j) s
+                  FH.writeAll (hHandle j) s
 
 -- | Reads the header information from the header file
 readHeader :: FH.FHandle -> IO Map Integer Integer
@@ -119,17 +129,16 @@ resetJournal = FH.truncateF . FH.filePath . jHandle
 -- | Replay the data from the Journal to bring back the database into a consistent
 -- state in case of a power failure
 -- Read every block from the journal and write to the database 
--- CAN DO BETTER!
 replayJournal :: Journal -> IO ()
 replayJournal j = do
-                    -- let li be the list of block numbers
-                    concatmap readAndWrite li
+                    let li = toAscList $ oldBlocks j --potential speedup if ascending?
+                    Prelude.map readAndWrite li
                     where
-                      readAndWrite :: Integer -> IO()
-                      readAndWrite bn = do
+                      readAndWrite :: (Integer,Integer) -> IO()
+                      readAndWrite (bn,jbn) = do
                                           maybebd <- readFromJournal j bn
                                           case maybebd of 
-                                            Just bd -> writeblock (dHandle j) bn bd
+                                            Just bd -> FH.writeBlock (dHandle j) bn bd
                                             Nothing -> return ()
 
 test = do 
