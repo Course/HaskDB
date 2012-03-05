@@ -34,6 +34,15 @@ writeBlock fh i bs = do
     BS.hPut (handle fh) (BS.take (blockSize fh) (BS.append bs (BS.pack (take (blockSize fh) $ cycle [000 :: GHC.Word.Word8] ))))
     hSeek (handle fh) AbsoluteSeek currentPos             -- Necessary because concurrent use of appendBlock and writeBlock was resulting in overwriting of block next to where writeBlock was called with append block . 
 
+-- | Writes all the data . Note that write Block truncates data if size is more than the given block. This will delete all the previous data present in the file. 
+writeAll :: FHandle -> BS.ByteString -> IO () 
+writeAll fh bs = do 
+    hSeek (handle fh) AbsoluteSeek 0 
+    BS.hPut (handle fh) bs 
+    size  <- hTell (handle fh) 
+    hSetFileSize (handle fh) size
+    
+
 -- | Appends a block at the end of the file 
 appendBlock :: FHandle -> BS.ByteString -> IO Integer
 appendBlock fh bs = do 
