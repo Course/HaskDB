@@ -41,7 +41,11 @@ writeAll fh bs = do
     BS.hPut (handle fh) bs 
     size  <- hTell (handle fh) 
     hSetFileSize (handle fh) size
-    
+
+readAll :: FHandle -> IO BS.ByteString
+readAll fh = do
+    hSeek (handle fh) AbsoluteSeek 0
+    BS.hGetContents (handle fh)
 
 -- | Appends a block at the end of the file 
 appendBlock :: FHandle -> BS.ByteString -> IO Integer

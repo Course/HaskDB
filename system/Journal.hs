@@ -5,6 +5,7 @@ module Journal where
 import System.IO
 import System.Directory
 import System.Random
+import Control.Applicative
 import Data.Map as Map
 import Data.Serialize
 import Data.Text
@@ -35,7 +36,7 @@ data Journal = Journal { journalID :: JId      -- filename prefix of the journal
 findJournals :: FilePath -> IO [JId]
 findJournals dp = do
     files <- getDirectoryContents dp
-    return [ id
+    return [ (Data.Text.unpack id)
            | file <- files
            , id <- maybeToList (stripSuffix (Data.Text.pack ".header") (Data.Text.pack file))
            ]
@@ -86,8 +87,8 @@ readFromJournal :: Journal -> Integer -> IO (Maybe BS.ByteString)
 readFromJournal j bn = do
                         let l = Map.lookup bn (oldBlocks j)
                         case l of
-                            Just val -> Just $ FH.readBlock  (jHandle j)  val
-                            Nothing -> Nothing
+                            Just val -> Just <$> FH.readBlock  (jHandle j)  val
+                            Nothing -> return Nothing
 
 -- | Writes the header to the header file
 writeHeader :: Journal -> IO ()
@@ -96,11 +97,11 @@ writeHeader j = do
                   FH.writeAll (hHandle j) s
 
 -- | Reads the header information from the header file
-readHeader :: FH.FHandle -> IO Map Integer Integer
+readHeader :: FH.FHandle -> IO (Map Integer Integer)
 readHeader fh = do
-                  let val = FH.readAll fh
-                  let decodedMap = decode (val)
-                  return decodedMap
+                  val <- FH.readAll fh
+                  let (Right m) = decode (val)  --Either String a
+                  return m
 
 
 -- | Write to a journal given block number and blockData
@@ -132,7 +133,7 @@ resetJournal = FH.truncateF . FH.filePath . jHandle
 replayJournal :: Journal -> IO ()
 replayJournal j = do
                     let li = toAscList $ oldBlocks j --potential speedup if ascending?
-                    Prelude.map readAndWrite li
+                    sequence_ $ Prelude.map readAndWrite li
                     where
                       readAndWrite :: (Integer,Integer) -> IO()
                       readAndWrite (bn,jbn) = do
@@ -150,6 +151,7 @@ test = do
     let y = Map.lookup 666 (oldBlocks l)
     r1 <- readFromJournal l 256
     r2 <- readFromJournal l 666
-    BS.putStrLn r1
-    BS.putStrLn r2
+    case r1 of 
+        Just v -> BS.putStrLn v
+        _ -> return ()
 
