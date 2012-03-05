@@ -35,7 +35,7 @@ writeBlock fh i bs = do
     hSeek (handle fh) AbsoluteSeek currentPos             -- Necessary because concurrent use of appendBlock and writeBlock was resulting in overwriting of block next to where writeBlock was called with append block . 
 
 -- | Appends a block at the end of the file 
-appendBlock :: FHandle -> BS.ByteString -> IO Int 
+appendBlock :: FHandle -> BS.ByteString -> IO Integer
 appendBlock fh bs = do 
     hSeek (handle fh) SeekFromEnd 0 
     currentPos <- hTell (handle fh)
