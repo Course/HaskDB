@@ -12,7 +12,7 @@ import System.HaskDB.Journal
 data FileVersion = Committed Int |
                    Uncomitted Int 
     deriving (Eq,Show) 
-data BlockNumber = BlockNumber Int 
+type BlockNumber = Integer
 data BlockData = BlockData BS.ByteString 
 data LogDescriptor = LogDescriptor 
 type FileInformation = FH.FHandle 
@@ -64,7 +64,7 @@ runTransaction ft fh = do
                     return $ Just output 
                     else return Nothing 
   where 
-    trans :: FT a -> FileInformation -> Maybe LogDescriptor  -> IO (a,Maybe LogDescriptor)
+    trans :: FT a -> FileInformation -> Maybe Journal -> IO (a,Maybe Journal)
     trans (Done a) _ d = return (a,d) 
     trans (ReadBlock bn c) fh d = do 
         val <- readBlock fh bn 

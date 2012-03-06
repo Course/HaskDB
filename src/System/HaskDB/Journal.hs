@@ -1,6 +1,3 @@
--- | A Journal is temporary file to keep track of data soon to be modified in the database.
--- Only one Journal per transaction?
--- Journal is a collection of "old blocks" in a particular transaction
 module System.HaskDB.Journal where
 import System.IO
 import System.Directory
@@ -13,6 +10,10 @@ import Data.Maybe
 import Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC 
 import qualified System.HaskDB.FileHandling as FH 
+
+-- | A Journal is temporary file to keep track of data soon to be modified in the database.
+-- Only one Journal per transaction?
+-- Journal is a collection of "old blocks" in a particular transaction
 
 -- | Do we need to distinguish between database handle and journal handle?
 type JHandle = FH.FHandle
