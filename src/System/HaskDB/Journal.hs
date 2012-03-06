@@ -1,4 +1,5 @@
 module System.HaskDB.Journal where
+
 import System.IO
 import System.Directory
 import System.Random
