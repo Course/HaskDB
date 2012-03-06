@@ -1,10 +1,10 @@
 {-# LANGUAGE ExistentialQuantification #-}
-module Transactions where 
+module System.HaskDB.Transactions where 
 import Control.Concurrent 
 import qualified Data.ByteString as BS 
-import qualified FileHandling as FH 
+import qualified System.HaskDB.FileHandling as FH 
 import Data.Maybe 
-import Journal 
+import System.HaskDB.Journal 
 
 ---- Some definitions to change the datatype afterwards . 
 -- Two types of FileVersion to distinguish whether the changes are comitted or not
