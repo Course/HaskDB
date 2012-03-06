@@ -4,6 +4,7 @@ import Control.Concurrent
 import qualified Data.ByteString as BS 
 import qualified FileHandling as FH 
 import Data.Maybe 
+import Journal 
 
 ---- Some definitions to change the datatype afterwards . 
 -- Two types of FileVersion to distinguish whether the changes are comitted or not
@@ -70,11 +71,13 @@ runTransaction ft fh = do
         trans (c val) fh d 
     trans (WriteBlock bn x c) fh d = do 
         des <- case d of 
-                    Nothing -> newLogDescriptor 
+                    Nothing -> newJournal fh 
                     Just oldDes -> return oldDes
+        
             -- This means it is the first write operation , so create a journal and all . You might want to change bool to Maybe fh , where fh can be handle to journal file .. 
             -- So if  it is Nothing then it means the  operations are read only , otherwise they are read write 
-        writeLog des bn x 
+        oldData <- readBlock fh bn 
+        writeToJournal des bn oldData
         writeBlock fh bn x 
         trans c fh (Just des)
 
