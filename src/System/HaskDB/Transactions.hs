@@ -1,4 +1,4 @@
-{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 module System.HaskDB.Transactions where 
 
 import Control.Concurrent 
@@ -6,10 +6,14 @@ import qualified Data.ByteString as BS
 import qualified System.HaskDB.FileHandling as FH 
 import Data.Maybe 
 import System.HaskDB.Journal 
-import System.HaskDB.TransactionFH 
+import qualified Data.BloomFilter as BF
+import Data.BloomFilter.Hash (cheapHashes)
 
 -- | Some definitions to change the datatype afterwards . 
-
+data TFile = TFile {
+    handle :: FH.FHandle 
+    }
+type BlockNumber = Integer
 data BlockData = BlockData BS.ByteString 
 data LogDescriptor = LogDescriptor 
 type FileInformation = FH.FHandle 
@@ -17,6 +21,7 @@ type FileVersion = BS.ByteString
 
 readBlock = FH.readBlock
 writeBlock = FH.writeBlock
+
 readBlockJ :: TFile -> BlockNumber -> IO a 
 readBlockJ = undefined  -- To be changed according to file handling api 
 writeBlockJ :: TFile -> BlockNumber -> a -> IO a 
@@ -50,11 +55,18 @@ newLogDescriptor = undefined
 writeLog :: LogDescriptor -> BlockNumber -> a -> IO () 
 writeLog = undefined 
 
+data Transaction = Transaction {
+    journal :: Maybe Journal ,
+    bloom :: Maybe (BF.Bloom BlockNumber) ,
+    rBlocks :: [BlockNumber]
+    }
+
+
 runTransaction :: FT a -> TFile -> IO (Maybe a) 
 runTransaction ft fh = do 
     fileVersion <- getFileVersion $ handle fh 
-    (output ,rw) <- trans ft fh Nothing 
-    if not.isNothing $ rw  then 
+    (output ,rw) <- trans ft fh $ Transaction Nothing Nothing [] 
+    if not.isNothing $ journal rw  then 
         -- Final for read write transaction 
         -- Operations like cleaning up journal or rollback in case of failure etc 
         return $ Just output 
@@ -65,26 +77,22 @@ runTransaction ft fh = do
                     return $ Just output 
                     else return Nothing 
   where 
-    trans :: FT a -> TFile -> Maybe Journal -> IO (a,Maybe Journal)
+    trans :: FT a -> TFile -> Transaction -> IO (a,Transaction)
     trans (Done a) _ d = return (a,d) 
     trans (ReadBlock bn c) fh d = do 
         val <- readBlock (handle fh) bn 
-        trans (c val) fh d 
+        trans (c val) fh $ d {rBlocks = bn : rBlocks d}
     trans (WriteBlock bn x c) fh d = do 
-        des <- case d of 
+        des <- case journal d of 
                     Nothing -> newJournal $ handle fh 
                     Just oldDes -> return oldDes
-        
+        let bl = case bloom d of 
+                    -- Experiment with the hashfunction and number of bits 
+                    Nothing -> BF.emptyB (cheapHashes 20) 4096
+                    Just oldBl -> oldBl
+        let newBl = BF.insertB bn bl  
             -- This means it is the first write operation , so create a journal and all . You might want to change bool to Maybe fh , where fh can be handle to journal file .. 
             -- So if  it is Nothing then it means the  operations are read only , otherwise they are read write 
-        oldData <- readBlock (handle fh) bn 
-        writeToJournal des bn oldData
-        writeBlock (handle fh) bn x 
-        trans c fh (Just des)
-
-
-
-
-
-
+        writeToJournal des bn x
+        trans c fh (d {journal = Just des,bloom = Just newBl} )
 
