@@ -51,7 +51,7 @@ instance Monad FT where
 
 -- PANKAJ implement below 2 functions in the TransactioFH and delete from here . 
 -- Check  Failure should also check the failure queue for priority and failure . 
-checkFailure :: FileVersion -> FileVersion -> TFile -> [BlockNumber] -> Bool 
+checkFailure :: FileVersion -> FileVersion -> TFile -> [BlockNumber] -> IO Bool 
 checkFailure = undefined 
 
 commitJournal :: Journal -> IO ()
@@ -60,7 +60,8 @@ commitJournal = undefined
 commit :: FileVersion -> (a,Transaction) -> TFile -> IO (Maybe a) 
 commit  oldFileVersion (output,trans) fh = do 
     newFileVersion <- getFileVersion $ fHandle fh  
-    if checkFailure oldFileVersion newFileVersion fh (rBlocks trans) 
+    cf <- checkFailure oldFileVersion newFileVersion fh (rBlocks trans) 
+    if cf 
         then do 
         -- PANKAJ check your concept of back or front .. 
             _ <- takeMVar (FH.synchVar $ fHandle fh)
