@@ -6,22 +6,22 @@ import qualified Data.ByteString as BS
 import qualified System.HaskDB.FileHandling as FH 
 import Data.Maybe 
 import System.HaskDB.Journal 
+import System.HaskDB.TransactionFH 
 
----- Some definitions to change the datatype afterwards . 
--- Two types of FileVersion to distinguish whether the changes are comitted or not
--- Or should we check the existence of a journal file to find out the status of the file
-data FileVersion = Committed Int |
-                   Uncomitted Int 
-    deriving (Eq,Show) 
-type BlockNumber = Integer
+-- | Some definitions to change the datatype afterwards . 
+
 data BlockData = BlockData BS.ByteString 
 data LogDescriptor = LogDescriptor 
 type FileInformation = FH.FHandle 
+type FileVersion = BS.ByteString
 
-readBlock :: FileInformation -> BlockNumber -> IO a 
-readBlock = undefined  -- To be changed according to file handling api 
-writeBlock :: FileInformation -> BlockNumber -> a -> IO a 
-writeBlock = undefined  -- To be changed according to file handling api 
+readBlock = FH.readBlock
+writeBlock = FH.writeBlock
+readBlockJ :: TFile -> BlockNumber -> IO a 
+readBlockJ = undefined  -- To be changed according to file handling api 
+writeBlockJ :: TFile -> BlockNumber -> a -> IO a 
+writeBlockJ = undefined  -- To be changed according to file handling api 
+
 
 -- | Reads the current file version from the disk . 
 getFileVersion :: FileInformation -> IO FileVersion 
@@ -33,8 +33,8 @@ changeFileVersion = undefined
 
 data FT a = 
     Done a |
-    forall x . ReadBlock BlockNumber (x -> FT a) |
-    forall x . WriteBlock BlockNumber x (FT a)
+    ReadBlock BlockNumber (BS.ByteString -> FT a) |
+    WriteBlock BlockNumber BS.ByteString (FT a)
 
 --  THINK if it is correct and how to define automatically in this case 
 instance Monad FT where 
@@ -50,9 +50,9 @@ newLogDescriptor = undefined
 writeLog :: LogDescriptor -> BlockNumber -> a -> IO () 
 writeLog = undefined 
 
-runTransaction :: FT a -> FileInformation -> IO (Maybe a) 
+runTransaction :: FT a -> TFile -> IO (Maybe a) 
 runTransaction ft fh = do 
-    fileVersion <- getFileVersion fh 
+    fileVersion <- getFileVersion $ handle fh 
     (output ,rw) <- trans ft fh Nothing 
     if not.isNothing $ rw  then 
         -- Final for read write transaction 
@@ -60,26 +60,26 @@ runTransaction ft fh = do
         return $ Just output 
         else do   
                 -- Only read operation in transaction 
-                newFileVersion <- getFileVersion fh  
+                newFileVersion <- getFileVersion $ handle fh  
                 if fileVersion == newFileVersion then 
                     return $ Just output 
                     else return Nothing 
   where 
-    trans :: FT a -> FileInformation -> Maybe Journal -> IO (a,Maybe Journal)
+    trans :: FT a -> TFile -> Maybe Journal -> IO (a,Maybe Journal)
     trans (Done a) _ d = return (a,d) 
     trans (ReadBlock bn c) fh d = do 
-        val <- readBlock fh bn 
+        val <- readBlock (handle fh) bn 
         trans (c val) fh d 
     trans (WriteBlock bn x c) fh d = do 
         des <- case d of 
-                    Nothing -> newJournal fh 
+                    Nothing -> newJournal $ handle fh 
                     Just oldDes -> return oldDes
         
             -- This means it is the first write operation , so create a journal and all . You might want to change bool to Maybe fh , where fh can be handle to journal file .. 
             -- So if  it is Nothing then it means the  operations are read only , otherwise they are read write 
-        oldData <- readBlock fh bn 
+        oldData <- readBlock (handle fh) bn 
         writeToJournal des bn oldData
-        writeBlock fh bn x 
+        writeBlock (handle fh) bn x 
         trans c fh (Just des)
 
 
