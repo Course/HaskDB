@@ -3,23 +3,24 @@ module System.HaskDB.TransactionFH where
 import qualified Data.ByteString as BS
 import qualified System.HaskDB.FileHandling as FH 
 import qualified Data.Dequeue as DQ 
-import qualified System.HaskDB.Journal as JU
 import Data.Maybe
 import Data.Dequeue
 import Data.BloomFilter.Easy
 import Data.IORef 
 import qualified Data.BloomFilter as BF 
+import System.HaskDB.Journal 
 
 type BlockNumber = Integer
 type JBloom = BF.Bloom BlockNumber
 data JInfo = JInfo 
-    { getJournal :: JU.Journal
+    { getJournal :: Journal
     , getBloomFilter :: JBloom
     }
 
 data TFile = TFile {
-    handle :: FH.FHandle ,
-    jQueue  :: IORef (DQ.BankersDequeue JInfo)
+    fHandle :: FH.FHandle ,
+    jQueue  :: IORef (DQ.BankersDequeue JInfo) ,
+    failedQueue :: IORef (DQ.BankersDequeue JInfo)
     }
 
 

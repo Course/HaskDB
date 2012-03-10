@@ -1,4 +1,4 @@
-{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 module System.HaskDB.Transactions where 
 
 import Control.Concurrent 
@@ -6,10 +6,13 @@ import qualified Data.ByteString as BS
 import qualified System.HaskDB.FileHandling as FH 
 import Data.Maybe 
 import System.HaskDB.Journal 
-import System.HaskDB.TransactionFH 
+import System.HaskDB.TransactionFH
+import qualified Data.BloomFilter as BF
+import qualified Data.Dequeue as DQ 
+import Data.BloomFilter.Hash (cheapHashes)
+import Data.IORef
 
 -- | Some definitions to change the datatype afterwards . 
-
 data BlockData = BlockData BS.ByteString 
 data LogDescriptor = LogDescriptor 
 type FileInformation = FH.FHandle 
@@ -17,6 +20,7 @@ type FileVersion = BS.ByteString
 
 readBlock = FH.readBlock
 writeBlock = FH.writeBlock
+
 readBlockJ :: TFile -> BlockNumber -> IO a 
 readBlockJ = undefined  -- To be changed according to file handling api 
 writeBlockJ :: TFile -> BlockNumber -> a -> IO a 
@@ -31,12 +35,13 @@ getFileVersion = undefined
 changeFileVersion :: FileInformation -> FileVersion -> IO ()
 changeFileVersion = undefined 
 
+-- | DataType for the Transaction.
 data FT a = 
     Done a |
     ReadBlock BlockNumber (BS.ByteString -> FT a) |
     WriteBlock BlockNumber BS.ByteString (FT a)
 
---  THINK if it is correct and how to define automatically in this case 
+-- | Monad Definition for the Transaction . Everything happens inside this monad . 
 instance Monad FT where 
     return = Done 
     m >>= f = case m of 
@@ -44,47 +49,78 @@ instance Monad FT where
         ReadBlock bn c -> ReadBlock bn (\i -> c i  >>= f) 
         WriteBlock bn x c -> WriteBlock bn x (c >>= f)
 
-newLogDescriptor :: IO LogDescriptor 
-newLogDescriptor = undefined 
+-- PANKAJ implement below 2 functions in the TransactioFH and delete from here . 
+-- Check  Failure should also check the failure queue for priority and failure . 
+checkFailure :: FileVersion -> FileVersion -> TFile -> [BlockNumber] -> IO Bool 
+checkFailure = undefined 
 
-writeLog :: LogDescriptor -> BlockNumber -> a -> IO () 
-writeLog = undefined 
+commitJournal :: Journal -> IO ()
+commitJournal = undefined 
 
-runTransaction :: FT a -> TFile -> IO (Maybe a) 
-runTransaction ft fh = do 
-    fileVersion <- getFileVersion $ handle fh 
-    (output ,rw) <- trans ft fh Nothing 
-    if not.isNothing $ rw  then 
-        -- Final for read write transaction 
-        -- Operations like cleaning up journal or rollback in case of failure etc 
-        return $ Just output 
-        else do   
-                -- Only read operation in transaction 
-                newFileVersion <- getFileVersion $ handle fh  
-                if fileVersion == newFileVersion then 
-                    return $ Just output 
-                    else return Nothing 
+commit :: FileVersion -> (a,Transaction) -> TFile -> IO (Maybe a) 
+commit  oldFileVersion (output,trans) fh = do 
+    newFileVersion <- getFileVersion $ fHandle fh  
+    cf <- checkFailure oldFileVersion newFileVersion fh (rBlocks trans) 
+    if cf 
+        then do 
+        -- PANKAJ check your concept of back or front .. 
+            _ <- takeMVar (FH.synchVar $ fHandle fh)
+            case bloom trans of 
+                Just bl -> do 
+                    let jr = fromJust $ journal trans 
+                    atomicModifyIORef (jQueue fh) (\q -> (DQ.pushBack q $ JInfo jr bl,()))
+                    commitJournal jr
+                _ -> return ()
+            putMVar (FH.synchVar $ fHandle fh) () 
+            return $ Just output 
+        else return Nothing 
+
+    
+
+
+data Transaction = Transaction {
+    journal :: Maybe Journal ,
+    bloom :: Maybe (BF.Bloom BlockNumber) ,
+    rBlocks :: [BlockNumber]
+    }
+
+
+
+runTransaction :: FT a -> TFile -> IO a
+runTransaction = runRetryTransaction False 
+
+-- | Bool field is true if transaction has failed once . 
+runRetryTransaction :: Bool -> FT a -> TFile -> IO a
+runRetryTransaction  failure ft fh = do 
+    fileVersion <- getFileVersion $ fHandle fh 
+    out <- trans ft fh $ Transaction Nothing Nothing [] 
+    cm <- commit fileVersion out fh 
+    case cm of 
+        Nothing -> do 
+            -- Experiment with the hashfunction and number of bits 
+            if not failure then 
+                atomicModifyIORef (failedQueue fh) $ \q -> (DQ.pushBack q $ JInfo (fromJust.journal.snd $ out) (BF.fromListB (cheapHashes 20) 4096 (rBlocks.snd $ out)),())
+            else  
+                return ()
+            -- Transaction failed once so Bool field is set to  true . This is done to  prevent repetitive addition of the transaction to the failure queue. 
+            runRetryTransaction True ft fh 
+        Just a -> return a  
+
   where 
-    trans :: FT a -> TFile -> Maybe Journal -> IO (a,Maybe Journal)
+    trans :: FT a -> TFile -> Transaction -> IO (a,Transaction)
     trans (Done a) _ d = return (a,d) 
     trans (ReadBlock bn c) fh d = do 
-        val <- readBlock (handle fh) bn 
-        trans (c val) fh d 
+        val <- readBlock (fHandle fh) bn 
+        trans (c val) fh $ d {rBlocks = bn : rBlocks d}
     trans (WriteBlock bn x c) fh d = do 
-        des <- case d of 
-                    Nothing -> newJournal $ handle fh 
+        des <- case journal d of 
+                    Nothing -> newJournal $ fHandle fh 
                     Just oldDes -> return oldDes
-        
-            -- This means it is the first write operation , so create a journal and all . You might want to change bool to Maybe fh , where fh can be handle to journal file .. 
-            -- So if  it is Nothing then it means the  operations are read only , otherwise they are read write 
-        oldData <- readBlock (handle fh) bn 
-        writeToJournal des bn oldData
-        writeBlock (handle fh) bn x 
-        trans c fh (Just des)
-
-
-
-
-
-
+        let bl = case bloom d of 
+                    -- Experiment with the hashfunction and number of bits 
+                    Nothing -> BF.emptyB (cheapHashes 20) 4096
+                    Just oldBl -> oldBl
+        let newBl = BF.insertB bn bl  
+        writeToJournal des bn x   -- To be ultimately written to the database by the sequencer 
+        trans c fh (d {journal = Just des,bloom = Just newBl} )
 
