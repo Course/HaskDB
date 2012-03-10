@@ -16,6 +16,7 @@ import qualified Data.BloomFilter as BF
 import qualified Data.Dequeue as DQ 
 import Data.BloomFilter.Hash (cheapHashes)
 import Data.IORef
+import Data.Unique
 
 
 -- | DataType for the Transaction.
@@ -75,27 +76,43 @@ data Transaction = Transaction {
 
 
 runTransaction :: FT a -> TFile -> IO a
-runTransaction = runRetryTransaction False 
+runTransaction = runRetryTransaction Nothing 
 
--- | Bool field is true if transaction has failed once . 
-runRetryTransaction :: Bool -> FT a -> TFile -> IO a
+-- | Maybe field is Not nothing if transaction has failed once . 
+runRetryTransaction :: Maybe Unique -> FT a -> TFile -> IO a
 runRetryTransaction  failure ft fh = do 
     fileVersion <- getFileVersion $ fHandle fh 
+    tid <- case failure of 
+            Nothing  -> newUnique 
+            Just a -> return a 
     out <- trans ft fh $ Transaction Nothing Nothing [] 
     cm <- commit fileVersion out fh 
     case cm of 
         Nothing -> do 
             -- Experiment with the hashfunction and number of bits 
-            if not failure then 
+            if isNothing failure then 
                 -- Adds the  current transaction readBlocks bloom filter to the failed transaction queue .
-                atomicModifyIORef (failedQueue fh) $ \q -> (DQ.pushBack q $ JInfo (fromJust.journal.snd $ out) (BF.fromListB (cheapHashes 20) 4096 (rBlocks.snd $ out)),())
+                atomicModifyIORef (failedQueue fh) $ \q -> (DQ.pushBack q $ (tid,BF.fromListB (cheapHashes 20) 4096 (rBlocks.snd $ out)),())
             else  
                 return ()
             -- Transaction failed once so Bool field is set to  true . This is done to  prevent repetitive addition of the transaction to the failure queue. 
-            runRetryTransaction True ft fh 
-        Just a -> return a  
+            runRetryTransaction (Just tid) ft fh 
+        Just a -> 
+            -- Previously failed transaction succeeds now . So delete it from the failure queue . 
+            if not $ isNothing failure 
+                then do 
+                        atomicModifyIORef (failedQueue fh) $ \q -> (deleteFromQueue q tid,())
+                        return a  
+                else 
+                    return a  
 
   where 
+    deleteFromQueue :: DQ.BankersDequeue (Unique,JBloom) -> Unique -> DQ.BankersDequeue (Unique,JBloom)
+    deleteFromQueue q id = do 
+        let (a,newQ) = DQ.popFront q 
+        case a of 
+            Nothing -> newQ 
+            Just e@(qid,bl) -> if qid /= id then DQ.pushFront (deleteFromQueue newQ id) e else newQ
     trans :: FT a -> TFile -> Transaction -> IO (a,Transaction)
     trans (Done a) _ d = return (a,d) 
     trans (ReadBlock bn c) fh d = do 
