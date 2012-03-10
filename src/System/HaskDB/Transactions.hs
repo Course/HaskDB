@@ -36,12 +36,13 @@ getFileVersion = undefined
 changeFileVersion :: FileInformation -> FileVersion -> IO ()
 changeFileVersion = undefined 
 
+-- | DataType for the Transaction.
 data FT a = 
     Done a |
     ReadBlock BlockNumber (BS.ByteString -> FT a) |
     WriteBlock BlockNumber BS.ByteString (FT a)
 
---  THINK if it is correct and how to define automatically in this case 
+-- | Monad Definition for the Transaction . Everything happens inside this monad . 
 instance Monad FT where 
     return = Done 
     m >>= f = case m of 
@@ -49,11 +50,8 @@ instance Monad FT where
         ReadBlock bn c -> ReadBlock bn (\i -> c i  >>= f) 
         WriteBlock bn x c -> WriteBlock bn x (c >>= f)
 
-newLogDescriptor :: IO LogDescriptor 
-newLogDescriptor = undefined 
-
-writeLog :: LogDescriptor -> BlockNumber -> a -> IO () 
-writeLog = undefined 
+checkFailure :: FileVersion -> FileVersion -> TFile -> [BlockNumber] -> Bool 
+checkFailure = undefined 
 
 data Transaction = Transaction {
     journal :: Maybe Journal ,
@@ -65,17 +63,17 @@ data Transaction = Transaction {
 runTransaction :: FT a -> TFile -> IO (Maybe a) 
 runTransaction ft fh = do 
     fileVersion <- getFileVersion $ handle fh 
-    (output ,rw) <- trans ft fh $ Transaction Nothing Nothing [] 
-    if not.isNothing $ journal rw  then 
-        -- Final for read write transaction 
-        -- Operations like cleaning up journal or rollback in case of failure etc 
-        return $ Just output 
+    (output ,trans) <- trans ft fh $ Transaction Nothing Nothing [] 
+    if isNothing $ journal trans  then do 
+        -- Only read  transaction 
+        newFileVersion <- getFileVersion $ handle fh  
+        if checkFailure fileVersion newFileVersion fh (rBlocks trans) then 
+            return $ Just output 
+            else return Nothing 
         else do   
-                -- Only read operation in transaction 
-                newFileVersion <- getFileVersion $ handle fh  
-                if fileVersion == newFileVersion then 
-                    return $ Just output 
-                    else return Nothing 
+                -- read Write Transaction
+                return $ Just output
+
   where 
     trans :: FT a -> TFile -> Transaction -> IO (a,Transaction)
     trans (Done a) _ d = return (a,d) 
@@ -91,8 +89,6 @@ runTransaction ft fh = do
                     Nothing -> BF.emptyB (cheapHashes 20) 4096
                     Just oldBl -> oldBl
         let newBl = BF.insertB bn bl  
-            -- This means it is the first write operation , so create a journal and all . You might want to change bool to Maybe fh , where fh can be handle to journal file .. 
-            -- So if  it is Nothing then it means the  operations are read only , otherwise they are read write 
-        writeToJournal des bn x
+        writeToJournal des bn x   -- To be ultimately written to the database by the sequencer 
         trans c fh (d {journal = Just des,bloom = Just newBl} )
 

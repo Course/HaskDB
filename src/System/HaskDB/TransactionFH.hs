@@ -14,4 +14,5 @@ data JInfo = JInfo
 data TFile = TFile {
     handle :: FH.FHandle ,
     jQueue  :: IORef (DQ.BankersDequeue JInfo)
+    failedQueue :: IORef (DQ.BankersDequeue JInfo)
     }
