@@ -50,6 +50,7 @@ instance Monad FT where
         WriteBlock bn x c -> WriteBlock bn x (c >>= f)
 
 -- PANKAJ implement below 2 functions in the TransactioFH and delete from here . 
+-- Check  Failure should also check the failure queue for priority and failure . 
 checkFailure :: FileVersion -> FileVersion -> TFile -> [BlockNumber] -> Bool 
 checkFailure = undefined 
 
@@ -83,17 +84,25 @@ data Transaction = Transaction {
     }
 
 
+
 runTransaction :: FT a -> TFile -> IO a
-runTransaction ft fh = do 
+runTransaction = runRetryTransaction False 
+
+-- | Bool field is true if transaction has failed once . 
+runRetryTransaction :: Bool -> FT a -> TFile -> IO a
+runRetryTransaction  failure ft fh = do 
     fileVersion <- getFileVersion $ fHandle fh 
     out <- trans ft fh $ Transaction Nothing Nothing [] 
     cm <- commit fileVersion out fh 
     case cm of 
         Nothing -> do 
             -- Experiment with the hashfunction and number of bits 
-            atomicModifyIORef (failedQueue fh) $ \q -> (DQ.pushBack q $ JInfo (fromJust.journal.snd $ out) (BF.fromListB (cheapHashes 20) 4096 (rBlocks.snd $ out)),())
-            -- Not corrent . Change later 
-            runTransaction ft fh 
+            if not failure then 
+                atomicModifyIORef (failedQueue fh) $ \q -> (DQ.pushBack q $ JInfo (fromJust.journal.snd $ out) (BF.fromListB (cheapHashes 20) 4096 (rBlocks.snd $ out)),())
+            else  
+                return ()
+            -- Transaction failed once so Bool field is set to  true . This is done to  prevent repetitive addition of the transaction to the failure queue. 
+            runRetryTransaction True ft fh 
         Just a -> return a  
 
   where 
