@@ -6,14 +6,13 @@ import qualified Data.ByteString as BS
 import qualified System.HaskDB.FileHandling as FH 
 import Data.Maybe 
 import System.HaskDB.Journal 
+import System.HaskDB.TransactionFH
 import qualified Data.BloomFilter as BF
+import qualified Data.Dequeue as DQ 
 import Data.BloomFilter.Hash (cheapHashes)
+import Data.IORef
 
 -- | Some definitions to change the datatype afterwards . 
-data TFile = TFile {
-    handle :: FH.FHandle 
-    }
-type BlockNumber = Integer
 data BlockData = BlockData BS.ByteString 
 data LogDescriptor = LogDescriptor 
 type FileInformation = FH.FHandle 
@@ -50,8 +49,32 @@ instance Monad FT where
         ReadBlock bn c -> ReadBlock bn (\i -> c i  >>= f) 
         WriteBlock bn x c -> WriteBlock bn x (c >>= f)
 
+-- PANKAJ implement below 2 functions in the TransactioFH and delete from here . 
 checkFailure :: FileVersion -> FileVersion -> TFile -> [BlockNumber] -> Bool 
 checkFailure = undefined 
+
+commitJournal :: Journal -> IO ()
+commitJournal = undefined 
+
+commit :: FileVersion -> (a,Transaction) -> TFile -> IO (Maybe a) 
+commit  oldFileVersion (output,trans) fh = do 
+    newFileVersion <- getFileVersion $ fHandle fh  
+    if checkFailure oldFileVersion newFileVersion fh (rBlocks trans) 
+        then do 
+        -- PANKAJ check your concept of back or front .. 
+            _ <- takeMVar (FH.synchVar $ fHandle fh)
+            case bloom trans of 
+                Just bl -> do 
+                    let jr = fromJust $ journal trans 
+                    atomicModifyIORef (jQueue fh) (\q -> (DQ.pushBack q $ JInfo jr bl,()))
+                    commitJournal jr
+                _ -> return ()
+            putMVar (FH.synchVar $ fHandle fh) () 
+            return $ Just output 
+        else return Nothing 
+
+    
+
 
 data Transaction = Transaction {
     journal :: Maybe Journal ,
@@ -60,29 +83,28 @@ data Transaction = Transaction {
     }
 
 
-runTransaction :: FT a -> TFile -> IO (Maybe a) 
+runTransaction :: FT a -> TFile -> IO a
 runTransaction ft fh = do 
-    fileVersion <- getFileVersion $ handle fh 
-    (output ,trans) <- trans ft fh $ Transaction Nothing Nothing [] 
-    if isNothing $ journal trans  then do 
-        -- Only read  transaction 
-        newFileVersion <- getFileVersion $ handle fh  
-        if checkFailure fileVersion newFileVersion fh (rBlocks trans) then 
-            return $ Just output 
-            else return Nothing 
-        else do   
-                -- read Write Transaction
-                return $ Just output
+    fileVersion <- getFileVersion $ fHandle fh 
+    out <- trans ft fh $ Transaction Nothing Nothing [] 
+    cm <- commit fileVersion out fh 
+    case cm of 
+        Nothing -> do 
+            -- Experiment with the hashfunction and number of bits 
+            atomicModifyIORef (failedQueue fh) $ \q -> (DQ.pushBack q $ JInfo (fromJust.journal.snd $ out) (BF.fromListB (cheapHashes 20) 4096 (rBlocks.snd $ out)),())
+            -- Not corrent . Change later 
+            runTransaction ft fh 
+        Just a -> return a  
 
   where 
     trans :: FT a -> TFile -> Transaction -> IO (a,Transaction)
     trans (Done a) _ d = return (a,d) 
     trans (ReadBlock bn c) fh d = do 
-        val <- readBlock (handle fh) bn 
+        val <- readBlock (fHandle fh) bn 
         trans (c val) fh $ d {rBlocks = bn : rBlocks d}
     trans (WriteBlock bn x c) fh d = do 
         des <- case journal d of 
-                    Nothing -> newJournal $ handle fh 
+                    Nothing -> newJournal $ fHandle fh 
                     Just oldDes -> return oldDes
         let bl = case bloom d of 
                     -- Experiment with the hashfunction and number of bits 
