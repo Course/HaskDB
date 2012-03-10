@@ -128,10 +128,20 @@ writeToJournal j bn bd = do
 resetJournal :: Journal -> IO ()
 resetJournal = FH.truncateF . FH.filePath . jHandle
 
+-- | Check if a block number is present in a Journal
+elemJ :: JInfo -> bn -> IO Bool
+elemJ ji bn = do
+    case elemB bn (getBloomFilter ji) of
+        False -> return False
+        True -> do
+            d <- JU.readFromJournal (getJournal ji) bn 
+            case d of
+                Just _ -> return True
 
 -- | Replay the data from the Journal to bring back the database into a consistent
 -- state in case of a power failure
 -- Read every block from the journal and write to the database 
+
 replayJournal :: Journal -> IO ()
 replayJournal j = do
                     let li = toAscList $ oldBlocks j --potential speedup if ascending?

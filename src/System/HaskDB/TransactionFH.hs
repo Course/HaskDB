@@ -53,10 +53,26 @@ readBlockJ tf bn = do
                                     Nothing -> func q' bn
                     (Nothing , _) -> FH.readBlock (fHandle tf) bn -- read from database file
 
--- PANKAJ implement below 2 functions in the TransactioFH and delete from here . 
+-- | Returns True if there is a block from bli which is probably in the  list of bloom filters
+checkF :: [JBloom] -> [BlockNumber] -> Bool
+checkF jbl bli = any id [res | jb <- jbl , bn <- bli , res <- elemB bn jb]
+
+
+getJInfoList :: JId -> JId -> DQ.BankersDequeue JInfo -> [JInfo]
+getJInfoList id1 id2 q = let li = takeFront (length q) q
+                         let lli = dropWhile (f id1) li
+                         takeWhile (f id2) lli
+                        where
+                         f id a = journalID (getJournal a) != id
+
 -- Check  Failure should also check the failure queue for priority and failure . 
 checkFailure :: FileVersion -> FileVersion -> TFile -> [BlockNumber] -> IO Bool 
-checkFailure = undefined 
+checkFailure oldfv newfv tf bli = do
+    q <- readIORef (jQueue tf)
+    let jli = getJInfoList oldfv newfv q
+    let jbl = map (getBloomFilter) jli
+    let b1 = checkF jbl bli
+
 
 commitJournal :: Journal -> IO ()
 commitJournal = undefined 
