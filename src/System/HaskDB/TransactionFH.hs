@@ -8,7 +8,7 @@ import Data.Dequeue
 import Data.BloomFilter.Easy
 import Data.IORef 
 import qualified Data.BloomFilter as BF 
-import System.HaskDB.Journal 
+import System.HaskDB.Journal as JU
 import qualified Data.ByteString as BS 
 
 data BlockData = BlockData BS.ByteString 
@@ -22,7 +22,7 @@ writeBlock = FH.writeBlock
 
 type JBloom = BF.Bloom BlockNumber
 data JInfo = JInfo 
-    { getJournal :: Journal
+    { getJournal :: JU.Journal
     , getBloomFilter :: JBloom
     }
 
@@ -51,6 +51,14 @@ readBlockJ tf bn = do
                                 case d of
                                     Just x -> return x
                                     Nothing -> func q' bn
-                    (Nothing , _) -> FH.readBlock (handle tf) bn -- read from database file
+                    (Nothing , _) -> FH.readBlock (fHandle tf) bn -- read from database file
+
+-- PANKAJ implement below 2 functions in the TransactioFH and delete from here . 
+-- Check  Failure should also check the failure queue for priority and failure . 
+checkFailure :: FileVersion -> FileVersion -> TFile -> [BlockNumber] -> IO Bool 
+checkFailure = undefined 
+
+commitJournal :: Journal -> IO ()
+commitJournal = undefined 
 
 
