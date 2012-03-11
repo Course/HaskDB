@@ -67,15 +67,23 @@ getJInfoList id1 id2 q = let li = takeFront (Data.Dequeue.length q) q
                         where
                          f id a = journalID (getJournal a) /= id
 
--- TODO:Check  Failure should also check the failure queue for priority and failure . 
+-- | checkFailure returns True when transaction has to fail. 
+-- The transaction will fail only in the following cases : - 
+-- 1. The set of  readBlocks of the current transaction and writeBlocks of the failed transaction is not disjoint
+-- 2. The set of the readBlocks of current transaction and the blocks changed in between old fileversion and new fileversion is not disjoint
 -- TODO:Union of BloomFilter
 checkFailure :: FileVersion -> FileVersion -> TFile -> [BlockNumber] -> IO Bool 
 checkFailure oldfv newfv tf bli = do
-    q <- readIORef (jQueue tf)
-    let jli = getJInfoList oldfv newfv q
-    let jbl = map (getBloomFilter) jli
-    let b1 = checkF jbl bli
-    return b1
+    fq <- readIORef (failedQueue tf)
+    let fli = map snd (takeFront (Data.Dequeue.length fq) fq)
+    case checkF fli bli of
+        True -> return True
+        False -> do
+            q <- readIORef (jQueue tf)
+            let jli = getJInfoList oldfv newfv q
+            let jbl = map (getBloomFilter) jli
+            let b1 = checkF jbl bli
+            return b1
 
 
 
