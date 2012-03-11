@@ -10,6 +10,7 @@ import Data.IORef
 import qualified Data.BloomFilter as BF 
 import System.HaskDB.Journal as JU
 import qualified Data.ByteString as BS 
+import Data.Unique 
 
 data BlockData = BlockData BS.ByteString 
 type BlockNumber = Integer
@@ -29,7 +30,7 @@ data JInfo = JInfo
 data TFile = TFile {
     fHandle :: FH.FHandle ,
     jQueue  :: IORef (DQ.BankersDequeue JInfo) ,
-    failedQueue :: IORef (DQ.BankersDequeue JInfo)
+    failedQueue :: IORef (DQ.BankersDequeue (Unique,JBloom))
     }
 
 
