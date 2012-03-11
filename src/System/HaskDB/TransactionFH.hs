@@ -15,7 +15,7 @@ data BlockData = BlockData BS.ByteString
 type BlockNumber = Integer
 data LogDescriptor = LogDescriptor 
 type FileInformation = FH.FHandle 
-type FileVersion = BS.ByteString
+type FileVersion = Integer
 
 readBlock = FH.readBlock
 writeBlock = FH.writeBlock
@@ -55,26 +55,26 @@ readBlockJ tf bn = do
 
 -- | Returns True if there is a block from bli which is probably in the  list of bloom filters
 checkF :: [JBloom] -> [BlockNumber] -> Bool
-checkF jbl bli = any id [res | jb <- jbl , bn <- bli , res <- elemB bn jb]
+checkF jbl bli = any id [elemB bn jb | jb <- jbl , bn <- bli]
 
 
 getJInfoList :: JId -> JId -> DQ.BankersDequeue JInfo -> [JInfo]
-getJInfoList id1 id2 q = let li = takeFront (length q) q
-                         let lli = dropWhile (f id1) li
+getJInfoList id1 id2 q = let li = takeFront (Data.Dequeue.length q) q
+                             lli = dropWhile (f id1) li 
+                        in
                          takeWhile (f id2) lli
                         where
-                         f id a = journalID (getJournal a) != id
+                         f id a = journalID (getJournal a) /= id
 
--- Check  Failure should also check the failure queue for priority and failure . 
+-- TODO:Check  Failure should also check the failure queue for priority and failure . 
+-- TODO:Union of BloomFilter
 checkFailure :: FileVersion -> FileVersion -> TFile -> [BlockNumber] -> IO Bool 
 checkFailure oldfv newfv tf bli = do
     q <- readIORef (jQueue tf)
     let jli = getJInfoList oldfv newfv q
     let jbl = map (getBloomFilter) jli
     let b1 = checkF jbl bli
+    return b1
 
-
-commitJournal :: Journal -> IO ()
-commitJournal = undefined 
 
 

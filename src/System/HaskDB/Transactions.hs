@@ -32,14 +32,6 @@ instance Monad FT where
         ReadBlock bn c -> ReadBlock bn (\i -> c i  >>= f) 
         WriteBlock bn x c -> WriteBlock bn x (c >>= f)
 
--- PANKAJ implement below 2 functions in the TransactioFH and delete from here . 
--- Check  Failure should also check the failure queue for priority and failure . 
-checkFailure :: FileVersion -> FileVersion -> TFile -> [BlockNumber] -> IO Bool 
-checkFailure = undefined 
-
-commitJournal :: Journal -> IO ()
-commitJournal = undefined 
-
 commit :: FileVersion -> (a,Transaction) -> TFile -> IO (Maybe a) 
 commit  oldFileVersion (output,trans) fh = do 
     _ <- takeMVar (FH.synchVar $ fHandle fh)
@@ -55,7 +47,7 @@ commit  oldFileVersion (output,trans) fh = do
                     -- Adds the current transaction written block bloom filter to the queue . Back is the  latest entry .  
                     atomicModifyIORef (jQueue fh) (\q -> (DQ.pushBack q $ JInfo jr bl,()))
                     -- No interleaving here ensured by the MVar locking . 
-                    commitJournal jr
+                    commitJournal jr newFileVersion
                 _ -> return ()
             putMVar (FH.synchVar $ fHandle fh) () 
             return $ Just output 
