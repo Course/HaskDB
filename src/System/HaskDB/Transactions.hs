@@ -105,7 +105,6 @@ runRetryTransaction  failure ft fh = do
                         return a  
                 else 
                     return a  
-
   where 
     deleteFromQueue :: DQ.BankersDequeue (Unique,JBloom) -> Unique -> DQ.BankersDequeue (Unique,JBloom)
     deleteFromQueue q id = do 

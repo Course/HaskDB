@@ -38,20 +38,20 @@ checkInBloomFilter bf bn = elemB bn bf
 
 -- | Read a block from the most recent journal that contains it 
 -- else read it from the database
-readBlockJ :: TFile -> BlockNumber -> IO BS.ByteString
-readBlockJ tf bn = do
-        q <- readIORef $ jQueue tf
-        func q bn
-    where 
-        func q bn = case popFront q of
-                    (Just jInfo, q') ->  
-                        case checkInBloomFilter (getBloomFilter jInfo) bn of
-                            False -> func q' bn
-                            True -> do
-                                d <- JU.readFromJournal (getJournal jInfo) bn
-                                case d of
-                                    Just x -> return x
-                                    Nothing -> func q' bn
-                    (Nothing , _) -> FH.readBlock (handle tf) bn -- read from database file
+{-readBlockJ :: TFile -> BlockNumber -> IO BS.ByteString-}
+{-readBlockJ tf bn = do-}
+        {-q <- readIORef $ jQueue tf-}
+        {-func q bn-}
+    {-where -}
+        {-func q bn = case popFront q of-}
+                    {-(Just jInfo, q') ->  -}
+                        {-case checkInBloomFilter (getBloomFilter jInfo) bn of-}
+                            {-False -> func q' bn-}
+                            {-True -> do-}
+                                {-d <- JU.readFromJournal (getJournal jInfo) bn-}
+                                {-case d of-}
+                                    {-Just x -> return x-}
+                                    {-Nothing -> func q' bn-}
+                    {-(Nothing , _) -> FH.readBlock (handle tf) bn -- read from database file-}
 
 
