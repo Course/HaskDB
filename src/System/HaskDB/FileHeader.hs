@@ -8,7 +8,7 @@ import Data.Serialize
 -- at a time . Other threads will be blocked untill allowed . 
 --
 data Header = Header 
-    {fileVersion :: BS.ByteString
+    {fileVersion :: Integer
     }
 instance Serialize Header where 
     put h = put $ fileVersion h 
@@ -24,7 +24,7 @@ createHeader fh = do
 
 -- | Change the FileVersion . 
 -- TODO : Make read and write together atomic and non failing in case of exception. 
-changeFileVersion :: FH.FHandle ->  BS.ByteString -> IO () 
+changeFileVersion :: FH.FHandle ->  Integer -> IO () 
 changeFileVersion fh bs = do 
     header <- BS.readFile headerPath -- Not necessary initially but when header is not just file version but schema too 
     BS.writeFile headerPath (encode $ Header bs)
@@ -32,7 +32,7 @@ changeFileVersion fh bs = do
     headerPath = getHeaderName fh 
 
 -- | Get the current Version of the File . 
-getFileVersion :: FH.FHandle -> IO BS.ByteString 
+getFileVersion :: FH.FHandle -> IO Integer
 getFileVersion fh = do 
     header <- BS.readFile  $ getHeaderName fh
     case decode header of 

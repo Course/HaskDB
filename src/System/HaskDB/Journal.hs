@@ -11,6 +11,7 @@ import Data.Maybe
 import Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC 
 import qualified System.HaskDB.FileHandling as FH 
+import System.HaskDB.FileHeader
 
 -- | A Journal is temporary file to keep track of data soon to be modified in the database.
 -- Only one Journal per transaction?
@@ -19,7 +20,7 @@ import qualified System.HaskDB.FileHandling as FH
 -- | Do we need to distinguish between database handle and journal handle?
 type JHandle = FH.FHandle
 type OldBlock = Integer
-type JId = String
+type JId = Integer
 
 data Journal = Journal { journalID :: JId      -- filename prefix of the journal
                        , hHandle :: FH.FHandle -- Handle for the header file
@@ -38,7 +39,7 @@ data Journal = Journal { journalID :: JId      -- filename prefix of the journal
 findJournals :: FilePath -> IO [JId]
 findJournals dp = do
     files <- getDirectoryContents dp
-    return [ (Data.Text.unpack id)
+    return [ read (Data.Text.unpack id)
            | file <- files
            , id <- maybeToList (stripSuffix (Data.Text.pack ".header") (Data.Text.pack file))
            ]
@@ -49,12 +50,14 @@ findJournals dp = do
 newJournal :: FH.FHandle -> IO Journal
 newJournal dh = do
                   gen <- newStdGen
-                  let filename = Prelude.take 20 (randomRs ('a','z') gen)
+                  latestfv <- getFileVersion dh 
+                  let jid = latestfv + 1
+                  let filename = show jid
                   let header = filename ++ ".header"
                   let journal = filename ++ ".journal"
                   headerHandle <- FH.openF header ReadWriteMode 1024
                   journalHandle <- FH.openF journal ReadWriteMode 1024
-                  let fJournal = Journal { journalID = filename
+                  let fJournal = Journal { journalID = jid
                                          , hHandle = headerHandle
                                          , jHandle = journalHandle
                                          , dHandle = dh
@@ -65,13 +68,13 @@ newJournal dh = do
 -- | Build a Journal from the journal file on disk
 buildJournal :: JId -> FH.FHandle -> IO Journal
 buildJournal id dh = do
-                      let filename = id
+                      let filename = show id
                       let header = filename ++ ".header"
                       let journal = filename ++ ".journal"
                       headerHandle <- FH.openF header ReadWriteMode 1024
                       journalHandle <- FH.openF journal ReadWriteMode 1024
                       retreivedMap <- readHeader headerHandle
-                      let fJournal = Journal { journalID = filename
+                      let fJournal = Journal { journalID = id
                                          , hHandle = headerHandle
                                          , jHandle = journalHandle
                                          , dHandle = dh
@@ -128,10 +131,18 @@ writeToJournal j bn bd = do
 resetJournal :: Journal -> IO ()
 resetJournal = FH.truncateF . FH.filePath . jHandle
 
+-- | Commit the Journal by writing the new FileVersion to its header
+-- TODO: Do it atomically
+commitJournal :: Journal -> Integer -> IO ()
+commitJournal j newfv = do
+    changeFileVersion (hHandle j) newfv
+    changeFileVersion (dHandle j) newfv
+
 
 -- | Replay the data from the Journal to bring back the database into a consistent
 -- state in case of a power failure
 -- Read every block from the journal and write to the database 
+
 replayJournal :: Journal -> IO ()
 replayJournal j = do
                     let li = toAscList $ oldBlocks j --potential speedup if ascending?
