@@ -132,7 +132,6 @@ resetJournal :: Journal -> IO ()
 resetJournal = FH.truncateF . FH.filePath . jHandle
 
 -- | Commit the Journal by writing the new FileVersion to its header
--- TODO: Do it atomically
 commitJournal :: Journal -> Integer -> IO ()
 commitJournal j newfv = do
     changeFileVersion (hHandle j) newfv
