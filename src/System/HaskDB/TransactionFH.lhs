@@ -1,3 +1,4 @@
+\begin{code}
 module System.HaskDB.TransactionFH where 
 
 import qualified Data.ByteString as BS
@@ -84,6 +85,4 @@ checkFailure oldfv newfv tf bli = do
             let jbl = map (getBloomFilter) jli
             let b1 = checkF jbl bli
             return b1
-
-
-
+\end{code}

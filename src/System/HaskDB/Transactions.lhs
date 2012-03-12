@@ -1,3 +1,4 @@
+\begin{code}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 -- | File Transactions Module .
 -- Every write Transaction is first written to a journal File . Every commited journal file ensures a valid transaction . A queue of bloomFilter of the  changed blocks per journal file is maintained . A pure read Transaction never blocks . When a transaction finishes it checks the file version when the transaction started and when it finishes are the same. If not then it checks whether the blocks read and the blocks changed since it started are disjoint or a higher priority transaction is not going to fail if this transaction succeeds. If any of the above happens then transaction succeeds and commits the journal file and adds the newly calculted bloomfilter to the queue. This operation is ensured to be atomic .  
@@ -120,4 +121,4 @@ runRetryTransaction  failure ft fh = do
         let newBl = BF.insertB bn bl  
         writeToJournal des bn x   -- To be ultimately written to the database by the sequencer 
         trans c fh (d {journal = Just des,bloom = Just newBl} )
-
+\end{code}

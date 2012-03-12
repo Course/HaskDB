@@ -1,3 +1,4 @@
+\begin{code}
 module System.HaskDB.FileHandling where 
 
 import System.IO
@@ -97,4 +98,4 @@ test = do
     x <- sequence $ map (readBlock p) [0..500]
     print x
     closeF p
-
+\end{code}

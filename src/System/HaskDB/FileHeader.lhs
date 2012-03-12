@@ -1,3 +1,4 @@
+\begin{code}
 module System.HaskDB.FileHeader where 
 import qualified System.HaskDB.FileHandling as FH
 import qualified Data.ByteString as BS 
@@ -43,4 +44,4 @@ getFileVersion fh = do
 -- | Given File Handle return the header file name  
 getHeaderName :: FH.FHandle -> FilePath 
 getHeaderName fh = FH.filePath fh ++ ".header"
-    
+\end{code}    

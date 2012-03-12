@@ -1,3 +1,4 @@
+\begin{code}
 module System.HaskDB.Journal where
 
 import System.IO
@@ -166,4 +167,4 @@ test = do
     case r1 of 
         Just v -> BS.putStrLn v
         _ -> return ()
-
+\end{code}
