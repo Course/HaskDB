@@ -27,10 +27,13 @@ data JInfo = JInfo
     , getBloomFilter :: JBloom
     }
 
+-- TODO : Heap implementation of transactions is much better as  only operation to support is 
+-- getMinFileVersion and insert a transaction and delete a transaction.
 data TFile = TFile {
-    fHandle :: FH.FHandle ,
-    jQueue  :: IORef (DQ.BankersDequeue JInfo) ,
-    failedQueue :: IORef (DQ.BankersDequeue (Unique,JBloom))
+    fHandle :: FH.FHandle
+    , jQueue  :: IORef (DQ.BankersDequeue JInfo)
+    , failedQueue :: IORef (DQ.BankersDequeue (Unique,JBloom))
+    , transactions :: IORef (DQ.BankersDequeue (Unique,FileVersion))
     }
 
 

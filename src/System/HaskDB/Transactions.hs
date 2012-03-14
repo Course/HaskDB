@@ -56,9 +56,6 @@ commit  oldFileVersion (output,trans) fh = do
             putMVar (FH.synchVar $ fHandle fh) () 
             return Nothing 
 
-    
-
-
 data Transaction = Transaction {
     journal :: Maybe Journal ,
     bloom :: Maybe (BF.Bloom BlockNumber) ,
@@ -71,14 +68,19 @@ runTransaction :: FT a -> TFile -> IO a
 runTransaction = runRetryTransaction Nothing 
 
 -- | Maybe field is Not nothing if transaction has failed once . 
+-- Getting File Version and adding it to the queue of transactions should be atomic . Otherwise sequencer can remove a journal before which another transaction has started . 
 runRetryTransaction :: Maybe Unique -> FT a -> TFile -> IO a
 runRetryTransaction  failure ft fh = do 
+    _ <- takeMVar (FH.synchVar $ fHandle fh)
     fileVersion <- getFileVersion $ fHandle fh 
     tid <- case failure of 
             Nothing  -> newUnique 
             Just a -> return a 
+    atomicModifyIORef (transactions fh) $ \q -> (DQ.pushBack q $ (tid,fileVersion) , ())
+    putMVar (FH.synchVar $ fHandle fh) () 
     out <- trans ft fh $ Transaction Nothing Nothing [] 
     cm <- commit fileVersion out fh 
+    atomicModifyIORef (transactions fh) $ \q -> (deleteFromQueue q tid, ())
     case cm of 
         Nothing -> do 
             -- Experiment with the hashfunction and number of bits 
@@ -98,7 +100,7 @@ runRetryTransaction  failure ft fh = do
                 else 
                     return a  
   where 
-    deleteFromQueue :: DQ.BankersDequeue (Unique,JBloom) -> Unique -> DQ.BankersDequeue (Unique,JBloom)
+    deleteFromQueue :: DQ.BankersDequeue (Unique,a) -> Unique -> DQ.BankersDequeue (Unique,a)
     deleteFromQueue q id = do 
         let (a,newQ) = DQ.popFront q 
         case a of 
@@ -107,7 +109,7 @@ runRetryTransaction  failure ft fh = do
     trans :: FT a -> TFile -> Transaction -> IO (a,Transaction)
     trans (Done a) _ d = return (a,d) 
     trans (ReadBlock bn c) fh d = do 
-        val <- readBlock (fHandle fh) bn 
+        val <- readBlockJ fh bn 
         trans (c val) fh $ d {rBlocks = bn : rBlocks d}
     trans (WriteBlock bn x c) fh d = do 
         des <- case journal d of 
@@ -121,3 +123,36 @@ runRetryTransaction  failure ft fh = do
         writeToJournal des bn x   -- To be ultimately written to the database by the sequencer 
         trans c fh (d {journal = Just des,bloom = Just newBl} )
 
+-- | Can be implemented in 2 ways . 
+-- 1. Keep Restoring Journal and popping them from the Queue until you find a journal  which has a version on which we have a currently active 
+-- transaction running . Yield () .
+-- 2. Keep Restoring Journal without popping from the queue and also keep a copy of journals restored. Now Another thread will wait until there are not any transactions which have started on or before that 
+-- version of the journal and delete the journal from the queue and also the journal file . 
+--
+-- The Second version requires extra memory .
+-- I am implementing the first Version here 
+sequencer :: TFile -> IO () 
+sequencer fh = do 
+    b <- readIORef $ jQueue fh
+    if  DQ.null b 
+        then 
+            yield
+        else do
+            let j = getJournal . fromJust $ DQ.first b
+            replayJournal j 
+            popFromJournalQueue j fh 
+            sequencer fh
+    where 
+        popFromJournalQueue j fh = do 
+            tq <- readIORef $ transactions fh 
+            if checkToDelete (journalID j) tq 
+                then 
+                    atomicModifyIORef (jQueue fh) $ \q -> (snd  $ DQ.popFront q , ())
+                else do  
+                    yield
+                    popFromJournalQueue j fh
+        checkToDelete jid tq = do 
+            let (front , rest) = DQ.popFront tq 
+            case front of 
+                Nothing -> True 
+                Just (id,fv) -> fv >= jid 
