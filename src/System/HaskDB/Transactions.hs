@@ -79,7 +79,7 @@ runRetryTransaction  failure ft fh = do
     atomicModifyIORef (transactions fh) $ \q -> (DQ.pushBack q $ (tid,fileVersion) , ())
     putMVar (FH.synchVar $ fHandle fh) () 
     out <- trans ft fh $ Transaction Nothing Nothing [] 
-    cm <- commit fileVersion out fh 
+
     atomicModifyIORef (transactions fh) $ \q -> (deleteFromQueue q tid, ())
     case cm of 
         Nothing -> do 
