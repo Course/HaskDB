@@ -11,8 +11,9 @@ import qualified Data.ByteString as BS
 import qualified System.HaskDB.FileHandling as FH 
 import System.HaskDB.FileHeader 
 import Data.Maybe 
+import System.IO
 import System.HaskDB.Journal 
-import System.HaskDB.TransactionFH
+import System.HaskDB.TransactionFH hiding(checkFailure)
 import qualified Data.BloomFilter as BF
 import qualified Data.Dequeue as DQ 
 import Data.BloomFilter.Hash (cheapHashes)
@@ -33,6 +34,8 @@ instance Monad FT where
         Done a -> f a 
         ReadBlock bn c -> ReadBlock bn (\i -> c i  >>= f) 
         WriteBlock bn x c -> WriteBlock bn x (c >>= f)
+
+checkFailure = undefined 
 
 commit :: FileVersion -> (a,Transaction) -> TFile -> IO (Maybe a) 
 commit  oldFileVersion (output,trans) fh = do 
@@ -60,7 +63,7 @@ commit  oldFileVersion (output,trans) fh = do
 data Transaction = Transaction {
     journal :: Maybe Journal ,
     bloom :: Maybe (BF.Bloom BlockNumber) ,
-    rBlocks :: [BlockNumber]
+    rBlocks :: BlockList 
     }
 
 
@@ -77,17 +80,23 @@ runRetryTransaction  failure ft fh = do
     tid <- case failure of 
             Nothing  -> newUnique 
             Just a -> return a 
+    let tf = (show $ hashUnique tid) ++ ".trans"
+    FH.truncateF tf 
+    tfh <- FH.openF tf ReadWriteMode (FH.blockSize $ fHandle fh) 
+    let rblks  =  BlockList  [] 8 tfh 
     atomicModifyIORef (transactions fh) $ \q -> (DQ.pushBack q $ (tid,fileVersion) , ())
     putMVar (FH.synchVar $ fHandle fh) () 
-    out <- trans ft fh $ Transaction Nothing Nothing [] 
+    out <- trans ft fh $ Transaction Nothing Nothing rblks
     cm <- commit fileVersion out fh
+    FH.closeF tfh
     atomicModifyIORef (transactions fh) $ \q -> (deleteFromQueue q tid, ())
     case cm of 
         Nothing -> do 
             -- Experiment with the hashfunction and number of bits 
             if isNothing failure then 
                 -- Adds the  current transaction readBlocks bloom filter to the failed transaction queue .
-                atomicModifyIORef (failedQueue fh) $ \q -> (DQ.pushBack q $ (tid,BF.fromListB (cheapHashes 20) 4096 (rBlocks.snd $ out)),())
+                -- BROKEN .. Bloom filter calculation 
+                atomicModifyIORef (failedQueue fh) $ \q -> (DQ.pushBack q $ (tid,BF.fromListB (cheapHashes 20) 4096 []),())
             else  
                 return ()
             -- Transaction failed once so Bool field is set to  true . This is done to  prevent repetitive addition of the transaction to the failure queue. 
@@ -111,7 +120,8 @@ runRetryTransaction  failure ft fh = do
     trans (Done a) _ d = return (a,d) 
     trans (ReadBlock bn c) fh d = do 
         val <- readBlockJ fh bn 
-        trans (c val) fh $ d {rBlocks = bn : rBlocks d}
+        rblks <- addBlock (fromIntegral bn) (rBlocks d)
+        trans (c val) fh $ d {rBlocks = rblks}
     trans (WriteBlock bn x c) fh d = do 
         des <- case journal d of 
                     Nothing -> newJournal $ fHandle fh 

@@ -33,7 +33,7 @@ readBlock :: FHandle -> Integer -> IO BS.ByteString
 readBlock fh i = do 
     _ <- takeMVar (synchVar fh)
     hSeek (handle fh) AbsoluteSeek $ (toInteger $ blockSize fh)*i 
-    ret <- BS.filter (/=000) <$> BS.hGet (handle fh) (blockSize fh) -- filters out \NUL character . 
+    ret <- fst <$> BS.foldr (\a (ls,b) -> if (a /= 000) then (BS.cons a ls,True) else ( if b then (BS.cons a ls,b) else (ls,b)) ) (BS.empty,False) <$> BS.hGet (handle fh) (blockSize fh) -- filters out \NUL character . 
     putMVar (synchVar fh) ()
     return ret 
 
@@ -67,6 +67,22 @@ appendBlock fh bs = do
     currentPos <- hTell (handle fh)
     BS.hPut (handle fh) (BS.take (blockSize fh) (BS.append bs (BS.pack (take (blockSize fh) $ cycle [000 :: GHC.Word.Word8] ))))
     return.floor $ (fromIntegral currentPos) / (fromIntegral $ blockSize fh)
+
+-- | Reads the last Block of the File and removes if from the File 
+getLastBlock :: FHandle -> IO (Maybe BS.ByteString)
+getLastBlock fh = do 
+    fs <- hFileSize (handle fh)
+    if fs > 0 
+        then do 
+            hSeek (handle fh) SeekFromEnd (-(fromIntegral $ blockSize fh))
+            bs <- BS.hGet (handle fh) (blockSize fh)
+            {-bs <- BS.hGet (handle fh) 32-}
+            hSetFileSize (handle fh) (fs - (fromIntegral $ blockSize fh)) 
+            return $ Just bs 
+        else 
+            return Nothing 
+
+
 
 
 -- | Flushes the buffer to hard disk 

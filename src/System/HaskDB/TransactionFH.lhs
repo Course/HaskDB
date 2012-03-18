@@ -12,6 +12,8 @@ import qualified Data.BloomFilter as BF
 import System.HaskDB.Journal as JU
 import qualified Data.ByteString as BS 
 import Data.Unique 
+import Data.Word
+import Data.Serialize
 
 data BlockData = BlockData BS.ByteString 
 type BlockNumber = Integer
@@ -88,4 +90,50 @@ checkFailure oldfv newfv tf bli = do
             let jbl = map (getBloomFilter) jli
             let b1 = checkF jbl bli
             return b1
+
+-- | Interface to maintain list of read Blocks 
+-- Only that much data is kept in the memory which can be fit in a file 
+-- Rest is written on to the hard disk . 
+
+-- Size of empty list is 8 bytes 
+data BlockList = BlockList {
+    blocks :: [Word64]
+    , size :: Int 
+    , transH :: FH.FHandle
+    }
+
+addBlock :: Word64 -> BlockList -> IO BlockList
+addBlock b bl = do 
+    let s = size bl 
+    let blkSize = FH.blockSize $ transH bl 
+    let blks = blocks bl
+    if s + 8 > blkSize 
+        then do  
+            FH.appendBlock (transH bl) $ encode blks 
+            return $ BlockList [b] 16 (transH bl)
+        else 
+            return $ BlockList (b:blks) (s+8) (transH bl)
+
+getBlock :: BlockList -> IO (Maybe Word64,BlockList)
+getBlock bl = do 
+    let s = size bl 
+    let blkSize = FH.blockSize $ transH bl 
+    let blks = blocks bl 
+    if s == 8 
+        then do  
+            bs <- FH.getLastBlock $ transH bl
+            case bs of 
+                Just bs -> do 
+                    let ls = decode bs
+                    case ls of 
+                        Right (x:xs) -> return (Just x,BlockList xs ((1 + Prelude.length xs)*8) (transH bl))
+                        Left err -> return (Nothing , BlockList [] 8 (transH bl))
+                Nothing -> return (Nothing , BlockList [] 8 (transH bl))
+        else do  
+            let (b:bs) = blks 
+            return (Just b ,  BlockList bs (s-8) (transH bl))
+
+
+        
+
 \end{code}
