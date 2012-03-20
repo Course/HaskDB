@@ -96,7 +96,7 @@ runRetryTransaction  failure ft fh = do
             if isNothing failure then 
                 -- Adds the  current transaction readBlocks bloom filter to the failed transaction queue .
                 -- BROKEN .. Bloom filter calculation 
-                atomicModifyIORef (failedQueue fh) $ \q -> (DQ.pushBack q $ (tid,BF.fromListB (cheapHashes 20) 4096 []),())
+                atomicModifyIORef (failedQueue fh) $ \q -> (DQ.pushBack q $ (tid,fileVersion),())
             else  
                 return ()
             -- Transaction failed once so Bool field is set to  true . This is done to  prevent repetitive addition of the transaction to the failure queue. 

@@ -35,7 +35,7 @@ data JInfo = JInfo
 data TFile = TFile {
     fHandle :: FH.FHandle
     , jQueue  :: IORef (DQ.BankersDequeue JInfo)
-    , failedQueue :: IORef (DQ.BankersDequeue (Unique,JBloom))
+    , failedQueue :: IORef (DQ.BankersDequeue (Unique,FileVersion))
     , transactions :: IORef (DQ.BankersDequeue (Unique,FileVersion))
     }
 
@@ -61,8 +61,9 @@ readBlockJ tf bn = do
                     (Nothing , _) -> FH.readBlock (fHandle tf) bn -- read from database file
 
 -- | Returns True if there is a block from bli which is probably in the  list of bloom filters
-checkF :: [JBloom] -> [BlockNumber] -> Bool
-checkF jbl bli = any id [elemB bn jb | jb <- jbl , bn <- bli]
+{-checkF :: [JBloom] -> [BlockNumber] -> Bool-}
+{-checkF jbl bli = any id [elemB bn jb | jb <- jbl , bn <- bli]-}
+checkF = undefined
 
 
 getJInfoList :: JId -> JId -> DQ.BankersDequeue JInfo -> [JInfo]
