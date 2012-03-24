@@ -19,6 +19,7 @@ import qualified Data.Dequeue as DQ
 import Data.BloomFilter.Hash (cheapHashes)
 import Data.IORef
 import Data.Unique
+import Control.Applicative
 
 
 -- | DataType for the Transaction.
@@ -45,9 +46,8 @@ commit  oldFileVersion (output,trans) fh = do
     if cf 
         then do 
         -- PANKAJ check your concept of back or front .. 
-            case bloom trans of 
-                Just bl -> do 
-                    let jr = fromJust $ journal trans 
+            case trans of 
+                Transaction _ (ReadWrite bl jr) -> do 
                     -- Locking to ensure atomicity of commit and pushing it to the queue .
                     -- Adds the current transaction written block bloom filter to the queue . Back is the  latest entry .  
                     atomicModifyIORef (jQueue fh) (\q -> (DQ.pushBack q $ JInfo jr bl,()))
@@ -60,13 +60,22 @@ commit  oldFileVersion (output,trans) fh = do
             putMVar (FH.synchVar $ fHandle fh) () 
             return Nothing 
 
+
 data Transaction = Transaction {
-    journal :: Maybe Journal ,
-    bloom :: Maybe (BF.Bloom BlockNumber) ,
     rBlocks :: BlockList 
+    , tType :: TransactionType 
     }
 
-
+data TransactionType = ReadOnly | ReadWrite {
+        bloom :: BF.Bloom BlockNumber
+        , journal :: Journal 
+        }
+rTorw :: Transaction -> BF.Bloom BlockNumber -> Journal -> Transaction 
+rTorw t@(Transaction rb ReadOnly) bl jl = Transaction rb (ReadWrite bl jl)
+rTorw t _ _ = t
+tMap :: Transaction -> (BF.Bloom BlockNumber -> BF.Bloom BlockNumber) -> (Journal -> Journal) -> Transaction
+tMap t@(Transaction rb ReadOnly) _ _ = t
+tMap (Transaction rb (ReadWrite bl jl)) fbl fjl = Transaction rb (ReadWrite (fbl bl) (fjl jl))
 
 runTransaction :: FT a -> TFile -> IO a
 runTransaction = runRetryTransaction Nothing 
@@ -86,7 +95,7 @@ runRetryTransaction  failure ft fh = do
     let rblks  =  BlockList  [] 8 tfh 
     atomicModifyIORef (transactions fh) $ \q -> (DQ.pushBack q $ (tid,fileVersion) , ())
     putMVar (FH.synchVar $ fHandle fh) () 
-    out <- trans ft fh $ Transaction Nothing Nothing rblks
+    out <- trans ft fh $ Transaction rblks ReadOnly
     cm <- commit fileVersion out fh
     FH.closeF tfh
     atomicModifyIORef (transactions fh) $ \q -> (deleteFromQueue q tid, ())
@@ -120,19 +129,14 @@ runRetryTransaction  failure ft fh = do
     trans (Done a) _ d = return (a,d) 
     trans (ReadBlock bn c) fh d = do 
         val <- readBlockJ fh bn 
-        rblks <- addBlock (fromIntegral bn) (rBlocks d)
-        trans (c val) fh $ d {rBlocks = rblks}
+        rblcks <- addBlock (fromIntegral bn) (rBlocks d)
+        trans (c val) fh $ d {rBlocks = rblcks}
+    -- Experiment with the hashfunction and number of bits 
     trans (WriteBlock bn x c) fh d = do 
-        des <- case journal d of 
-                    Nothing -> newJournal $ fHandle fh 
-                    Just oldDes -> return oldDes
-        let bl = case bloom d of 
-                    -- Experiment with the hashfunction and number of bits 
-                    Nothing -> BF.emptyB (cheapHashes 20) 4096
-                    Just oldBl -> oldBl
-        let newBl = BF.insertB bn bl  
-        writeToJournal des bn x   -- To be ultimately written to the database by the sequencer 
-        trans c fh (d {journal = Just des,bloom = Just newBl} )
+        rw <- rTorw d (BF.emptyB (cheapHashes 20) 4096) <$> newJournal (fHandle fh)
+        let newBl = BF.insertB bn (bloom $ tType rw)  
+        writeToJournal (journal $ tType rw) bn x   -- To be ultimately written to the database by the sequencer 
+        trans c fh (rw {tType = (tType rw) {bloom = newBl}} )
 
 -- | Can be implemented in 2 ways . 
 -- 1. Keep Restoring Journal and popping them from the Queue until you find a journal  which has a version on which we have a currently active 
