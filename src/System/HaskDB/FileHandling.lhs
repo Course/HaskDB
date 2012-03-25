@@ -7,6 +7,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC 
 import Control.Concurrent 
 import Control.Applicative
+import System.HaskDB.Fsync 
 -- | New File Handle with blocksize in Bytes stored in the Handle 
 -- synchVar is used to provide atomicity to read and write operations . 
 data FHandle = FHandle {
@@ -87,7 +88,7 @@ getLastBlock fh = do
 
 -- | Flushes the buffer to hard disk 
 flushBuffer :: FHandle -> IO () 
-flushBuffer fh = hFlush $ handle fh 
+flushBuffer fh = sync $ handle fh 
 
 -- | Zeroes out the file . 
 truncateF :: FilePath -> IO ()

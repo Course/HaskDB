@@ -144,7 +144,7 @@ I am implementing the first Version here
 > 
 > commit :: FileVersion -> TFile -> (a,Transaction) -> IO (Maybe a) 
 > commit  oldFileVersion fh (output,trans) = do 
->     bracket_ (takeMVar $ FH.synchVar $ fHandle fh) (putMVar (FH.synchVar $ fHandle fh) () )
+>     out <- bracket_ (takeMVar $ FH.synchVar $ fHandle fh) (putMVar (FH.synchVar $ fHandle fh) () )
 >         ( do 
 >             newFileVersion <- getFileVersion $ fHandle fh  
 >             cf <- checkSuccess oldFileVersion newFileVersion fh (rBlocks trans) 
@@ -155,7 +155,11 @@ I am implementing the first Version here
 >                             commitJournal jr newFileVersion
 >                         _ -> return ()
 >                     return $ Just output ) 
-> 
+>     FH.flushBuffer $ jHandle $ journal $ tType trans
+>     FH.flushBuffer $ hHandle $ journal $ tType trans
+>     return out 
+>     
+>
 > rTorw :: Transaction -> BF.Bloom BlockNumber -> Journal -> Transaction 
 > rTorw t@(Transaction rb ReadOnly) bl jl = Transaction rb (ReadWrite bl jl)
 > rTorw t _ _ = t
