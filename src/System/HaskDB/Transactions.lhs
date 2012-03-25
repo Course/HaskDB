@@ -126,6 +126,7 @@ I am implementing the first Version here
 >     if  DQ.null b then yield else do
 >         let j = getJournal . fromJust $ DQ.first b
 >         replayJournal j 
+>         FH.flushBuffer (fHandle fh)
 >         popFromJournalQueue j fh 
 >         sequencer fh
 >     where 
