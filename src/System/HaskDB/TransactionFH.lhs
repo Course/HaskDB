@@ -14,6 +14,7 @@ import qualified Data.ByteString as BS
 import Data.Unique 
 import Data.Word
 import Data.Serialize
+import Control.Concurrent 
 
 data BlockData = BlockData BS.ByteString 
 type BlockNumber = Integer
@@ -34,6 +35,7 @@ data JInfo = JInfo
 -- getMinFileVersion and insert a transaction and delete a transaction.
 data TFile = TFile {
     fHandle :: FH.FHandle
+    , commitSynch :: MVar ()
     , jQueue  :: IORef (DQ.BankersDequeue JInfo)
     , failedQueue :: IORef (DQ.BankersDequeue (Unique,FileVersion))
     , transactions :: IORef (DQ.BankersDequeue (Unique,FileVersion))
