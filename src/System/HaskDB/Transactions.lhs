@@ -18,8 +18,10 @@
 > module System.HaskDB.Transactions (
 >    runTransaction 
 >    , retryTransaction
->    , readBlock 
->    , writeBlock
+>    , readBlockT 
+>    , writeBlockT
+>    , openTF 
+>    , closeTF 
 >    ) where 
 
 > import Control.Concurrent 
@@ -61,8 +63,6 @@ Every Transaction is represented as the following datatype .
 > -- | writeBlockT to be used inside the FT Monad 
 > writeBlockT :: BlockNumber -> BS.ByteString -> FT ()
 > writeBlockT v x =  WriteBlock v x $ return () 
-
-> checkSuccess = undefined 
 
 > data Transaction = Transaction {
 >     rBlocks :: BlockList 
@@ -125,7 +125,6 @@ Every Transaction is represented as the following datatype .
 >     newTransactionFile :: Unique -> IO String -- Uniqueness not guaranteed 
 >     newTransactionFile tid = do  
 >         let tf = (show $ hashUnique tid) ++ ".trans"
->         FH.truncateF tf 
 >         return tf
 >
 >     addToTransactionQ :: TFile -> IO (Unique,FileVersion)
@@ -147,18 +146,18 @@ Every Transaction is represented as the following datatype .
 >                else newQ
 >
 >     trans :: FT a -> TFile -> Transaction -> IO (a,Transaction)
->     trans (Done a) _ d = return (a,d) 
+>     trans (Done a) _ d = do 
+>         return (a,d) 
 >     trans (ReadBlock bn c) fh d = do 
 >         val <- readBlockJ fh bn 
 >         rblcks <- addBlock (fromIntegral bn) (rBlocks d)
 >         trans (c val) fh $ d {rBlocks = rblcks}
 >     -- Experiment with the hashfunction and number of bits 
 >     trans (WriteBlock bn x c) fh d = do 
->         rw <- rToRw d (BF.emptyB (cheapHashes 20) 4096) 
->                       <$> newJournal (fHandle fh)
+>         rw <- rToRw d (BF.emptyB (cheapHashes 20) 4096) (newJournal (fHandle fh))
 >         let newBl = BF.insertB bn (bloom $ tType rw)  
->         writeToJournal (journal $ tType rw) bn x
->         trans c fh (rw {tType = (tType rw) {bloom = newBl}} )
+>         j <- writeToJournal (journal $ tType rw) bn x
+>         trans c fh (rw {tType = (tType rw) {bloom = newBl,journal = j}} )
 
 Can be implemented in 2 ways . 
 
@@ -185,8 +184,8 @@ I am implementing the first Version here
 >         popFromJournalQueue j fh = do 
 >             tq <- readIORef $ transactions fh 
 >             if checkToDelete (journalID j) tq then 
->                     atomicModifyIORef (jQueue fh) (
-                                        (\q -> (snd  $ DQ.popFront q , ()))
+>                     atomicModifyIORef (jQueue fh) 
+>                                      (\q -> (snd  $ DQ.popFront q , ()))
 >                 else do  
 >                     yield
 >                     popFromJournalQueue j fh
@@ -207,8 +206,8 @@ I am implementing the first Version here
 >                 case trans of 
 >                     Transaction _ (ReadWrite bl jr) -> do 
 >                         atomicModifyIORef (jQueue fh) 
-                                        (\q -> (DQ.pushBack q $ JInfo jr bl,()))
->                         commitJournal jr newFV
+>                                       (\q -> (DQ.pushBack q $ JInfo jr bl,()))
+>                         commitJournal jr
 >                     _ -> return ()
 >                 return $ Just output ) 
 >     FH.flushBuffer $ jHandle $ journal $ tType trans
@@ -221,9 +220,11 @@ I am implementing the first Version here
 > -- Blocksize taken to be 4096 Bytes 
 > withFile fp = bracket (FH.openF fp ReadWriteMode 4096) FH.closeF
 >                   
-> rToRw :: Transaction -> BF.Bloom BlockNumber -> Journal -> Transaction 
-> rToRw t@(Transaction rb ReadOnly) bl jl = Transaction rb (ReadWrite bl jl)
-> rToRw t _ _ = t
+> rToRw :: Transaction -> BF.Bloom BlockNumber -> IO Journal -> IO Transaction 
+> rToRw t@(Transaction rb ReadOnly) bl jl = do 
+>     j <- jl 
+>     return $ Transaction rb (ReadWrite bl j)
+> rToRw t _ _ = return t 
 > tMap :: Transaction -> (BF.Bloom BlockNumber -> BF.Bloom BlockNumber) 
 >      -> (Journal -> Journal) -> Transaction
 > tMap t@(Transaction rb ReadOnly) _ _ = t

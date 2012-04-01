@@ -29,6 +29,10 @@ data Journal = Journal { journalID :: JId      -- filename prefix of the journal
                        , dHandle :: FH.FHandle -- Handle for the database File
                        , oldBlocks :: Map Integer Integer -- Map from block number in database to block number of the journal
                        }
+closeJournal j = do 
+    FH.closeF $ jHandle j 
+    FH.closeF $ hHandle j
+
 
 -- | An oldBlock  is the "old data" that is to be replaced by the writeblock succeeding it
 {-data OldBlock = OldBlock { id :: Int-}
@@ -91,6 +95,7 @@ readAllBlocksFrom j = undefined
 -- | Given a block number in the database file , read it from the Journal
 readFromJournal :: Journal -> Integer -> IO (Maybe BS.ByteString)
 readFromJournal j bn = do
+                        print $ oldBlocks j
                         let l = Map.lookup bn (oldBlocks j)
                         case l of
                             Just val -> Just <$> FH.readBlock  (jHandle j)  val
@@ -111,14 +116,16 @@ readHeader fh = do
 
 
 -- | Write to a journal given block number and blockData
+-- CHANGE THIS .. CASE d line not logically correct 
 writeToJournal :: Journal -> Integer -> BS.ByteString -> IO Journal
 writeToJournal j bn bd = do
-                            let d = Map.lookup bn (oldBlocks j) 
-                            case d of
-                                Just _ -> return j
-                                Nothing -> do 
+                            {-let d = Map.lookup bn (oldBlocks j) -}
+                            {-case d of-}
+                                {-Just _ -> return j-}
+                                {-Nothing -> do -}
                                              val <- FH.appendBlock  (jHandle j) bd
                                              let newMap = insert bn val (oldBlocks j)
+                                             print newMap
                                              let fJournal = Journal { journalID = journalID j
                                                                     , hHandle = hHandle j
                                                                     , jHandle = jHandle j
@@ -126,17 +133,15 @@ writeToJournal j bn bd = do
                                                                     , oldBlocks = newMap
                                                                     }
                                              writeHeader fJournal
-                                             return fJournal
+                                             return fJournal 
 
 -- | To zero out the journal file
 resetJournal :: Journal -> IO ()
-resetJournal = FH.truncateF . FH.filePath . jHandle
+resetJournal = FH.truncateF . jHandle
 
 -- | Commit the Journal by writing the new FileVersion to its header
-commitJournal :: Journal -> Integer -> IO ()
-commitJournal j newfv = do
-    changeFileVersion (hHandle j) newfv
-    changeFileVersion (dHandle j) newfv
+commitJournal :: Journal -> IO ()
+commitJournal j = changeFileVersion (dHandle j)
 
 
 -- | Replay the data from the Journal to bring back the database into a consistent
