@@ -8,9 +8,11 @@ import qualified Data.ByteString.Char8 as BSC
 import Control.Concurrent 
 import Control.Applicative
 import System.HaskDB.Fsync 
+import Data.IORef 
 -- | New File Handle with blocksize in Bytes stored in the Handle 
 -- synchVar is used to provide atomicity to read and write operations . 
 data FHandle = FHandle {
+    fileVersion :: IORef (Integer) ,
     filePath :: FilePath , 
     synchVar :: MVar () ,
     blockSize :: Int ,
@@ -22,16 +24,24 @@ openF :: FilePath -> IOMode -> Int -> IO FHandle
 openF fp m bs = do 
     p <- openBinaryFile fp m
     sync <- newMVar ()
-    return $ FHandle fp sync bs p
+    ver <- newIORef 0
+    return $ FHandle ver fp sync bs p
 
 
 -- | Closes the file Handle 
 closeF :: FHandle -> IO ()
-closeF = hClose.handle 
+closeF fh  = do 
+    print ("closing handle" ++ (filePath fh))
+    hClose $ handle fh
 
 -- | Given the File Handle and block number , reads the block and returns it 
 readBlock :: FHandle -> Integer -> IO BS.ByteString 
 readBlock fh i = do 
+    isCl <- hIsClosed (handle fh)
+    if isCl 
+        then 
+        print ("Handle is Closed" ++ (filePath fh))
+        else return ()
     _ <- takeMVar (synchVar fh)
     hSeek (handle fh) AbsoluteSeek $ (toInteger $ blockSize fh)*i 
     ret <- fst <$> BS.foldr (\a (ls,b) -> if (a /= 000) then (BS.cons a ls,True) else ( if b then (BS.cons a ls,b) else (ls,b)) ) (BS.empty,False) <$> BS.hGet (handle fh) (blockSize fh) -- filters out \NUL character . 
@@ -91,10 +101,8 @@ flushBuffer :: FHandle -> IO ()
 flushBuffer fh = sync $ handle fh 
 
 -- | Zeroes out the file . 
-truncateF :: FilePath -> IO ()
-truncateF fp = do 
-    p <- openF fp WriteMode 1024 
-    closeF p 
+truncateF :: FHandle -> IO ()
+truncateF fh = hSetFileSize (handle fh) 0 
 
 test = do 
     c <- openF "abc.b" WriteMode 1024   -- Truncates to zero length file 
