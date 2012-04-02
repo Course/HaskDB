@@ -20,21 +20,7 @@ class (Show a,Monad m) => Backend b m a | b -> m where
     sync :: Handle b -> m ()
 
 
--- Pure Functions to simulate file system . This implementation only support one handle per file .
--- Pessimistic implementation so data is not written to the simulated disk until sync is not called .
-data TestDisk a = TestDisk {
-    disk :: M.Map FilePath (File a)
-    , buffers :: M.Map FilePath (File a) 
-    , bufferSize :: Int -- Current buffer Size 
-    , openFiles :: M.Map FilePath Mode
-    }
 
-data File a = File {
-    blocks :: M.Map Int a 
-    , size :: Int 
-    }
-
-data Mode = ReadWrite | Read | Write 
 
 instance Show a => Backend (TestDisk a)  (State (TestDisk a)) a where 
     data Handle (TestDisk a) = Handle FilePath 
@@ -57,7 +43,22 @@ instance Show a => Backend (TestDisk a)  (State (TestDisk a)) a where
     sync (Handle fp) = do  
         t <- get 
         put $ flushBuffer t fp 
- 
+
+-- Pure Functions to simulate file system . This implementation only support one handle per file .
+-- Pessimistic implementation so data is not written to the simulated disk until sync is not called .
+data TestDisk a = TestDisk {
+    disk :: M.Map FilePath (File a)
+    , buffers :: M.Map FilePath (File a) 
+    , bufferSize :: Int -- Current buffer Size 
+    , openFiles :: M.Map FilePath Mode
+    } deriving (Eq,Show)
+
+data File a = File {
+    blocks :: M.Map Int a 
+    , size :: Int 
+    } deriving (Eq, Show)
+
+data Mode = ReadWrite | Read | Write deriving (Eq,Show) 
 
 -- Opens the file . If file is not present then creates it . Also create the buffer space.
 openFile :: TestDisk a -> FilePath -> Mode -> TestDisk a
@@ -73,8 +74,8 @@ openFile t fp md = let
 -- Flushes the buffer and closes the handle .
 closeFile ::  TestDisk a -> FilePath -> TestDisk a
 closeFile t fp = let opfs = openFiles t 
+                     d = if M.member fp (disk t) && M.member fp (buffers t) then flushBuffer t fp else t
                      newOpfs = M.delete fp opfs 
-                     d = flushBuffer t fp 
                      in d {openFiles = newOpfs , buffers = M.delete fp (buffers t)}
 
 -- Writes the buffers of the given handle to the disk 
