@@ -1,26 +1,18 @@
-{-# LINE 1 "Fsync.hsc" #-}
-{-# LANGUAGE ForeignFunctionInterface #-}
-{-# LINE 2 "Fsync.hsc" #-}
-module System.HaskDB.Fsync (sync) where
-
-import Foreign.C.Error (throwErrnoIfMinus1_)
-import Foreign.C.Types (CInt)
-import System.Posix.Types (Fd(..))
-import System.Posix.IO (handleToFd)
-import System.IO 
-
-
-{-# LINE 11 "Fsync.hsc" #-}
-
-foreign import ccall "fsync"
-       c_fsync :: CInt -> IO CInt
-
-fsync :: Fd -> IO ()
-fsync (Fd fd) =  throwErrnoIfMinus1_ "fsync" $ c_fsync fd
-
-sync :: Handle -> IO ()
-sync fh = do 
-    fd <- handleToFd fh  
-    fsync fd
-
-
+module System.HaskDB.Fsync (sync) where 
+import Foreign.C.Error
+import Foreign.C.Types
+import qualified System.IO as IO
+import qualified System.IO.Error as IO
+import GHC.IO.FD (FD(..))
+import GHC.IO.Handle.Types (Handle__(..))
+import GHC.IO.Handle.Internals (wantWritableHandle)
+import Data.Typeable
+foreign import ccall "unistd.h fsync" c_fsync :: CInt -> IO CInt
+sync :: IO.Handle -> IO ()
+sync h = do
+  IO.hFlush h
+  wantWritableHandle "hSync" h $ fsyncH
+    where
+      fsyncH Handle__ {haDevice = dev} = maybe (return ()) fsyncD $ cast dev
+      fsyncD FD {fdFD = fd} = throwErrnoPathIfMinus1_ "fsync" (show h)
+                              (c_fsync fd)
