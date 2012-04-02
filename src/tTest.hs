@@ -23,4 +23,5 @@ main = do
     {-runTransaction test newDB -}
     result <- runTransaction test2 newDB 
     print result 
+    sequencer newDB
     
