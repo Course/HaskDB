@@ -210,8 +210,10 @@ I am implementing the first Version here
 >                         commitJournal jr
 >                     _ -> return ()
 >                 return $ Just output ) 
->     FH.flushBuffer $ jHandle $ journal $ tType trans
->     FH.flushBuffer $ hHandle $ journal $ tType trans
+>     case trans of 
+>         Transaction _ t@(ReadWrite _ jl ) -> do FH.flushBuffer $ jHandle jl
+>                                                 FH.flushBuffer $ hHandle jl
+>         otherwise -> return ()
 >     return out 
 >
 > withSynch :: MVar () -> IO b -> IO b
