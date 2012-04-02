@@ -22,6 +22,7 @@
 >    , writeBlockT
 >    , openTF 
 >    , closeTF 
+>    , sequencer
 >    ) where 
 
 > import Control.Concurrent 
