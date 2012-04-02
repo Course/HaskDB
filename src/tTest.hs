@@ -16,6 +16,8 @@ test = do
 test2 = do 
     readBlockT  0
 
+test3 = do
+    writeBlockT 0 $ rand2 4096
 
 main = do 
     newDB <- openTF "test.dat"
@@ -23,5 +25,6 @@ main = do
     {-runTransaction test newDB -}
     result <- runTransaction test2 newDB 
     print result 
+    runTransaction test3 newDB
     sequencer newDB
     
