@@ -1,3 +1,13 @@
+\documentclass{article}
+%include lhs2TeX.fmt
+\begin{document}
+Whenever a block is to be written to the main Transaction File , we can essentially follow one of the following two approaches: - 
+Copy the original block to the Journal and try writing the changed block to the main file. If the transaction goes through successfully , we can discard the Journal . This approach is simpler to implement and we started with this approach in the beginning. But we came to realize that this would be highly inefficient .\\
+Our current approach is based on an idea similar to Write Ahead Logging in Sqlite. Instead of writing the "old data" to journal , we write the new data first to the Journal and then eventually move it to the main file. But this approach means the main file alone is no more the only place to read data from. The main file with all the journals together really give us the latest picture of our data.
+
+A Journal is a temporary file defined per transaction.It is used to keep track of the blocks changed by a transaction. It stores the new data that needs to be eventually written to the main database. 
+Instead of storing the old data into the Journal and using it to restore the datbase in case of data inconsistency
+
 \begin{code}
 module System.HaskDB.Journal where
 
@@ -14,15 +24,19 @@ import qualified Data.ByteString.Char8 as BSC
 import qualified System.HaskDB.FileHandling as FH 
 import System.HaskDB.FileHeader
 
--- | A Journal is temporary file to keep track of data soon to be modified in the database.
--- Only one Journal per transaction?
--- Journal is a collection of "old blocks" in a particular transaction
+\end{code}
 
--- | Do we need to distinguish between database handle and journal handle?
+Some literate haskell here
+
+\begin{code}
 type JHandle = FH.FHandle
 type OldBlock = Integer
 type JId = Integer
+\end{code}
 
+Some more literate haskell
+
+\begin{code}
 data Journal = Journal { journalID :: JId      -- filename prefix of the journal
                        , hHandle :: FH.FHandle -- Handle for the header file
                        , jHandle :: FH.FHandle -- Handle for the Journal file
@@ -33,14 +47,11 @@ closeJournal j = do
     FH.closeF $ jHandle j 
     FH.closeF $ hHandle j
 
+\end{code}
 
--- | An oldBlock  is the "old data" that is to be replaced by the writeblock succeeding it
-{-data OldBlock = OldBlock { id :: Int-}
-                         {-, blockNumber :: Int-}
-                         {-, blockData :: BS-}
-                         {-}-}
+some more literate haskell
 
--- | Find existing Journals present on the disk 
+\begin{code}
 findJournals :: FilePath -> IO [JId]
 findJournals dp = do
     files <- getDirectoryContents dp
@@ -49,9 +60,11 @@ findJournals dp = do
            , id <- maybeToList (stripSuffix (Data.Text.pack ".header") (Data.Text.pack file))
            ]
     -- return a list of JIds
+\end{code}
 
+Create a new unique Journal file
 
--- | Create a new unique Journal file
+\begin{code}
 newJournal :: FH.FHandle -> IO Journal
 newJournal dh = do
                   gen <- newStdGen
@@ -69,8 +82,12 @@ newJournal dh = do
                                          , oldBlocks = Map.empty
                                          }
                   return fJournal
+\end{code}
 
--- | Build a Journal from the journal file on disk
+Build a Journal from the journal file on disk
+
+\begin{code}
+
 buildJournal :: JId -> FH.FHandle -> IO Journal
 buildJournal id dh = do
                       let filename = show id
@@ -87,12 +104,16 @@ buildJournal id dh = do
                                          }
                       return fJournal
 
--- | It reads all the blocks in a journal
+\end{code}
+
+It reads all the blocks in a Journal
+
 readAllBlocksFrom :: Journal -> IO [BS.ByteString]
 readAllBlocksFrom j = undefined
 
+Given a block number in the database file , read it from the Journal
 
--- | Given a block number in the database file , read it from the Journal
+\begin{code}
 readFromJournal :: Journal -> Integer -> IO (Maybe BS.ByteString)
 readFromJournal j bn = do
                         print $ oldBlocks j
@@ -100,21 +121,32 @@ readFromJournal j bn = do
                         case l of
                             Just val -> Just <$> FH.readBlock  (jHandle j)  val
                             Nothing -> return Nothing
+\end{code}
 
--- | Writes the header to the header file
+Writes the header to the header file
+
+\begin{code}
 writeHeader :: Journal -> IO ()
 writeHeader j = do
-                  let s = encode (oldBlocks j)
-                  FH.writeAll (hHandle j) s
+  let s = encode (oldBlocks j)
+  FH.writeAll (hHandle j) s
+\end{code}
 
--- | Reads the header information from the header file
+Reads the header information from the header file
+
+\begin{code}
 readHeader :: FH.FHandle -> IO (Map Integer Integer)
 readHeader fh = do
-                  val <- FH.readAll fh
-                  let (Right m) = decode (val)  --Either String a
-                  return m
+  val <- FH.readAll fh
+  let (Right m) = decode (val)  --Either String a
+  return m
+\end{code}
 
+Write to a journal given block number and blockData
 
+To zero out the journal file
+
+\begin{code}
 -- | Write to a journal given block number and blockData
 -- CHANGE THIS .. CASE d line not logically correct 
 writeToJournal :: Journal -> Integer -> BS.ByteString -> IO Journal
@@ -140,6 +172,7 @@ resetJournal :: Journal -> IO ()
 resetJournal = FH.truncateF . jHandle
 
 -- | Commit the Journal by writing the new FileVersion to its header
+-- change this later
 commitJournal :: Journal -> IO ()
 commitJournal j = changeFileVersion (dHandle j)
 
@@ -148,6 +181,13 @@ commitJournal j = changeFileVersion (dHandle j)
 -- state in case of a power failure
 -- Read every block from the journal and write to the database 
 
+\end{code}
+
+Replay the data from the Journal to bring back the database into a consistent
+state in case of a power failure
+Read every block from the journal and write to the database 
+
+\begin{code}
 replayJournal :: Journal -> IO ()
 replayJournal j = do
                     let li = toAscList $ oldBlocks j --potential speedup if ascending?
@@ -173,3 +213,4 @@ test = do
         Just v -> BS.putStrLn v
         _ -> return ()
 \end{code}
+\end{document}
