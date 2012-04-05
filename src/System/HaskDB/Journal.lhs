@@ -23,6 +23,7 @@ import Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC 
 import qualified System.HaskDB.FileHandling as FH 
 import System.HaskDB.FileHeader
+import Data.IORef
 
 \end{code}
 
@@ -68,8 +69,7 @@ Create a new unique Journal file
 newJournal :: FH.FHandle -> IO Journal
 newJournal dh = do
                   gen <- newStdGen
-                  latestfv <- getFileVersion dh 
-                  let jid = latestfv + 1
+                  jid <- atomicModifyIORef (FH.journalId dh) (\a -> (a+1,a))
                   let filename = show jid
                   let header = filename ++ ".header"
                   let journal = filename ++ ".journal"
@@ -116,7 +116,6 @@ Given a block number in the database file , read it from the Journal
 \begin{code}
 readFromJournal :: Journal -> Integer -> IO (Maybe BS.ByteString)
 readFromJournal j bn = do
-                        print $ oldBlocks j
                         let l = Map.lookup bn (oldBlocks j)
                         case l of
                             Just val -> Just <$> FH.readBlock  (jHandle j)  val
@@ -157,7 +156,6 @@ writeToJournal j bn bd = do
                                 {-Nothing -> do -}
                                              val <- FH.appendBlock  (jHandle j) bd
                                              let newMap = insert bn val (oldBlocks j)
-                                             print newMap
                                              let fJournal = Journal { journalID = journalID j
                                                                     , hHandle = hHandle j
                                                                     , jHandle = jHandle j

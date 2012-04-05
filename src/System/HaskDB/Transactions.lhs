@@ -89,7 +89,7 @@ Every Transaction is represented as the following datatype .
 >                  -> IO a
 > retryTransaction ft tFile = fromJust <$> runT Nothing True ft tFile 
 
-> runT :: Maybe Unique -- Nothing if transaction never failed else Just id 
+> runT :: Maybe Integer -- Nothing if transaction never failed else Just id 
 >      -> Bool  -- True if the transaction is to be retried in case of failure 
 >      -> FT a  -- Transaction 
 >      -> TFile -- The File on which to run this transaction 
@@ -98,13 +98,15 @@ Every Transaction is represented as the following datatype .
 > runT  failure retry ft tFile = do 
 >     (tid,fileVersion) <- withSynch (FH.synchVar $ fHandle tFile) 
 >                                    (addToTransactionQ tFile)
+>     print fileVersion
 >     transFile <- newTransactionFile tid
 >     maybeOut <- withFile transFile $ runAndCommit fileVersion tFile ft 
 >     atomicModifyIORef (transactions tFile) $ \q -> (deleteFromQueue q tid, ())
+>     if isNothing maybeOut then print "FAILED" else print "SUCCESS"
 >     if retry then retryIfFailed failure maybeOut fileVersion tid ft tFile 
 >         else return maybeOut
 >   where 
->     retryIfFailed :: Maybe Unique -> Maybe a -> FileVersion -> Unique
+>     retryIfFailed :: Maybe Integer -> Maybe a -> FileVersion -> Integer
 >                   -> FT a -> TFile -> IO (Maybe a) 
 >     retryIfFailed Nothing out@(Just a) _ _ _ _ = return out 
 >     retryIfFailed (Just tid) out@(Just a) _ _ _ tFile = do   
@@ -123,21 +125,21 @@ Every Transaction is represented as the following datatype .
 >         out <- trans ft tFile $ Transaction (BlockList [] 8 fh) ReadOnly
 >         commit fv tFile out 
 >
->     newTransactionFile :: Unique -> IO String -- Uniqueness not guaranteed 
+>     newTransactionFile :: Integer -> IO String -- Uniqueness not guaranteed 
 >     newTransactionFile tid = do  
->         let tf = (show $ hashUnique tid) ++ ".trans"
+>         let tf = (show tid) ++ ".trans"
 >         return tf
 >
->     addToTransactionQ :: TFile -> IO (Unique,FileVersion)
+>     addToTransactionQ :: TFile -> IO (Integer,FileVersion)
 >     addToTransactionQ fh = do 
 >         fileVersion <- getFileVersion $ fHandle fh 
->         tid <- maybe newUnique return failure
+>         tid <- maybe (atomicModifyIORef (FH.journalId $ fHandle fh) (\a-> (a+1,a))) return failure
 >         atomicModifyIORef (transactions fh) 
 >                           (\q -> (DQ.pushBack q $ (tid,fileVersion) , ()))
 >         return (tid,fileVersion) 
 >
->     deleteFromQueue :: DQ.BankersDequeue (Unique,a) -> Unique 
->                     -> DQ.BankersDequeue (Unique,a)
+>     deleteFromQueue :: DQ.BankersDequeue (Integer,a) -> Integer
+>                     -> DQ.BankersDequeue (Integer,a)
 >     deleteFromQueue q id = do 
 >         let (a,newQ) = DQ.popFront q 
 >         case a of 

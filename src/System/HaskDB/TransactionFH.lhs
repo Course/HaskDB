@@ -39,8 +39,8 @@ data TFile = TFile {
     fHandle :: FH.FHandle
     , commitSynch :: MVar ()
     , jQueue  :: IORef (DQ.BankersDequeue JInfo)
-    , failedQueue :: IORef (DQ.BankersDequeue (Unique,FileVersion))
-    , transactions :: IORef (DQ.BankersDequeue (Unique,FileVersion))
+    , failedQueue :: IORef (DQ.BankersDequeue (Integer,FileVersion))
+    , transactions :: IORef (DQ.BankersDequeue (Integer,FileVersion))
     }
 
 openTF fpath = do 
@@ -81,9 +81,7 @@ readBlockJ tf bn = do
                         case checkInBloomFilter (getBloomFilter jInfo) bn of
                             False -> func q' bn
                             True -> do
-                                print "reading from Journal"
                                 d <- JU.readFromJournal (getJournal jInfo) bn
-                                print d
                                 case d of
                                     Just x -> return x
                                     Nothing -> func q' bn

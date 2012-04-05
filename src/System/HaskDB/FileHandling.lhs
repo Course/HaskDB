@@ -13,6 +13,7 @@ import Data.IORef
 -- synchVar is used to provide atomicity to read and write operations . 
 data FHandle = FHandle {
     fileVersion :: IORef (Integer) ,
+    journalId :: IORef (Integer) , 
     filePath :: FilePath , 
     synchVar :: MVar () ,
     blockSize :: Int ,
@@ -22,16 +23,18 @@ data FHandle = FHandle {
 -- | Opens the file given path , mode and BlockSize and returns the file handle 
 openF :: FilePath -> IOMode -> Int -> IO FHandle 
 openF fp m bs = do 
+    {-print ("opening handle" ++ fp)-}
     p <- openBinaryFile fp m
     sync <- newMVar ()
     ver <- newIORef 0
-    return $ FHandle ver fp sync bs p
+    jid <- newIORef 0
+    return $ FHandle ver jid fp sync bs p
 
 
 -- | Closes the file Handle 
 closeF :: FHandle -> IO ()
 closeF fh  = do 
-    print ("closing handle" ++ (filePath fh))
+    {-print ("closing handle" ++ (filePath fh))-}
     hClose $ handle fh
 
 -- | Given the File Handle and block number , reads the block and returns it 
