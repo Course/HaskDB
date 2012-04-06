@@ -38,7 +38,7 @@ type JId = Integer
 Some more literate haskell
 
 \begin{code}
-data Journal = Journal { journalID :: JId      -- filename prefix of the journal
+data Journal = Journal { journalID :: JId      -- filename prefix of the Journal
                        , hHandle :: FH.FHandle -- Handle for the header file
                        , jHandle :: FH.FHandle -- Handle for the Journal file
                        , dHandle :: FH.FHandle -- Handle for the database File

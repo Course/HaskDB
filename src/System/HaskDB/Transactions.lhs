@@ -204,12 +204,13 @@ I am implementing the first Version here
 >     out <- withSynch (commitSynch fh)
 >         (do 
 >             newFV <- getFileVersion $ fHandle fh  
+>             print $ "Old fv " ++ (show oldFV) 
 >             cf <- checkSuccess oldFV newFV fh (rBlocks trans) 
 >             if  not cf then return Nothing else do 
 >                 case trans of 
 >                     Transaction _ (ReadWrite bl jr) -> do 
 >                         atomicModifyIORef (jQueue fh) 
->                                       (\q -> (DQ.pushBack q $ JInfo jr bl,()))
+>                                       (\q -> (DQ.pushBack q $ JInfo jr bl (newFV + 1),()))
 >                         commitJournal jr
 >                     _ -> return ()
 >                 return $ Just output ) 
