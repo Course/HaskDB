@@ -17,6 +17,7 @@ fttest = do
     writeBlockT 2 $ rand2 4096 
     writeBlockT 3 $ rand 4096 
     writeBlockT 4 $ rand2 4096 
+    readBlockT 0 
 
 fttest2 = do 
     readBlockT  0
