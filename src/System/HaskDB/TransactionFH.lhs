@@ -3,6 +3,7 @@ module System.HaskDB.TransactionFH where
 
 import qualified Data.ByteString as BS
 import qualified System.HaskDB.FileHandling as FH 
+import qualified System.HaskDB.FileHeader as FHD
 import qualified Data.Dequeue as DQ 
 import Data.Maybe
 import Data.Dequeue
@@ -31,12 +32,13 @@ type JBloom = BF.Bloom BlockNumber
 data JInfo = JInfo 
     { getJournal :: JU.Journal
     , getBloomFilter :: JBloom
+    , getfv :: Integer
     }
 
 -- TODO : Heap implementation of transactions is much better as  only operation to support is 
 -- getMinFileVersion and insert a transaction and delete a transaction.
 data TFile = TFile {
-    fHandle :: FH.FHandle
+    fHandle :: FH.FHandle -- handle of the database file
     , commitSynch :: MVar ()
     , jQueue  :: IORef (DQ.BankersDequeue JInfo)
     , failedQueue :: IORef (DQ.BankersDequeue (Integer,FileVersion))
@@ -69,7 +71,8 @@ closeTF tFile = do
 
 checkInBloomFilter bf bn = elemB bn bf
 
--- | Read a block from the most recent journal that contains it 
+-- | First , if it has its own journal , then it should read from that
+-- else read a block from the most recent journal that contains it 
 -- else read it from the database
 readBlockJ :: TFile -> BlockNumber -> IO BS.ByteString
 readBlockJ tf bn = do
@@ -93,7 +96,11 @@ checkF :: [JBloom] -> BlockList -> IO Bool
 {-checkF jbl bli = any id [elemB bn jb | jb <- jbl , bn <- bli]-}
 checkF [] bli =  return False 
 checkF js bli = do 
+    --print $ checkOneBlock js 0
     (f,rest) <- getBlock bli 
+    print f
+    --print $ "Bloom List " ++ (show js)
+    --print $ "Block List " ++ (show (blocks bli))
     case f of 
         Just x -> if checkOneBlock js (toInteger x) then return True else checkF js rest 
         Nothing -> return False 
@@ -106,12 +113,7 @@ checkF js bli = do
 
 
 getJInfoList :: JId -> JId -> DQ.BankersDequeue JInfo -> [JInfo]
-getJInfoList id1 id2 q = let li = takeFront (Data.Dequeue.length q) q
-                             lli = dropWhile (f id1) li 
-                        in
-                         takeWhile (f id2) lli
-                        where
-                         f id a = journalID (getJournal a) /= id
+getJInfoList id1 id2 q = takeWhile (\q -> (getfv q) /= id1) $ takeBack (Data.Dequeue.length q) q
 
 -- | checkFailure returns True when transaction has to fail. 
 -- The transaction will fail only in the following cases : - 
@@ -134,7 +136,10 @@ checkFailure oldfv newfv tf bli = do
             q <- readIORef (jQueue tf)
             let jli = getJInfoList oldfv newfv q
             let jbl = map (getBloomFilter) jli
-            checkF jbl bli
+            print $ map getfv jli 
+            f <- checkF jbl bli
+            print f
+            return f
 
 -- | Interface to maintain list of read Blocks 
 -- Only that much data is kept in the memory which can be fit in a file 
