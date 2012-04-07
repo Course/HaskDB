@@ -28,6 +28,17 @@ type FileVersion = Integer
 readBlock = FH.readBlock
 writeBlock = FH.writeBlock
 
+data Transaction = Transaction {
+    rBlocks :: BlockList 
+    , tType :: TransactionType 
+    }
+
+data TransactionType = ReadOnly | ReadWrite {
+        bloom :: BF.Bloom BlockNumber
+        , journal :: Journal 
+        }
+
+
 type JBloom = BF.Bloom BlockNumber
 data JInfo = JInfo 
     { getJournal :: JU.Journal
@@ -38,7 +49,7 @@ data JInfo = JInfo
 -- TODO : Heap implementation of transactions is much better as  only operation to support is 
 -- getMinFileVersion and insert a transaction and delete a transaction.
 data TFile = TFile {
-    fHandle :: FH.FHandle -- handle of the database file
+    fHandle :: FH.FHandle -- handle of the database file 
     , commitSynch :: MVar ()
     , jQueue  :: IORef (DQ.BankersDequeue JInfo)
     , failedQueue :: IORef (DQ.BankersDequeue (Integer,FileVersion))
@@ -71,11 +82,22 @@ closeTF tFile = do
 
 checkInBloomFilter bf bn = elemB bn bf
 
+readBlockFromOwnJournal :: TFile -> BlockNumber -> Transaction -> IO (Maybe BS.ByteString)
+readBlockFromOwnJournal tf bn d = do
+    case (tType d) of 
+      ReadOnly -> return Nothing
+      ReadWrite _ j -> JU.readFromJournal j bn
+
 -- | First , if it has its own journal , then it should read from that
 -- else read a block from the most recent journal that contains it 
 -- else read it from the database
-readBlockJ :: TFile -> BlockNumber -> IO BS.ByteString
-readBlockJ tf bn = do
+readBlockJ :: TFile -> BlockNumber -> Transaction -> IO BS.ByteString
+readBlockJ tf bn d = do
+  r <- readBlockFromOwnJournal tf bn d
+  case r of 
+    Just x -> do
+               return x 
+    Nothing -> do
         q <- readIORef $ jQueue tf
         if DQ.null q then do return BS.empty else func q bn
     where 

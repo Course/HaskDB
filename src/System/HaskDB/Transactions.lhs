@@ -65,16 +65,6 @@ Every Transaction is represented as the following datatype .
 > writeBlockT :: BlockNumber -> BS.ByteString -> FT ()
 > writeBlockT v x =  WriteBlock v x $ return () 
 
-> data Transaction = Transaction {
->     rBlocks :: BlockList 
->     , tType :: TransactionType 
->     }
-
-> data TransactionType = ReadOnly | ReadWrite {
->         bloom :: BF.Bloom BlockNumber
->         , journal :: Journal 
->         }
-
 > -- | Runs the given transaction on the file. 
 > -- Transaction may fail in which case it returns Nothing.
 > runTransaction :: FT a  -- ^ FileTransaction to be performed 
@@ -152,7 +142,7 @@ Every Transaction is represented as the following datatype .
 >     trans (Done a) _ d = do 
 >         return (a,d) 
 >     trans (ReadBlock bn c) fh d = do 
->         val <- readBlockJ fh bn 
+>         val <- readBlockJ fh bn d
 >         rblcks <- addBlock (fromIntegral bn) (rBlocks d)
 >         trans (c val) fh $ d {rBlocks = rblcks}
 >     -- Experiment with the hashfunction and number of bits 
