@@ -15,6 +15,7 @@
 > import Data.IORef
 
 Whenever a block is to be written to the main Transaction File , we can essentially follow one of the following two approaches: - 
+
 * Copy the original block to the Journal and try writing the changed block to the main file. If the transaction goes through successfully , we can discard the Journal . This approach is simpler to implement and we started with this approach in the beginning. But we came to realize that this would be highly inefficient .
 * Our current approach is based on an idea similar to Write Ahead Logging in Sqlite. Instead of writing the "old data" to journal , we write the new data first to the Journal and then eventually move it to the main file. But this approach means the main file alone is no more the only place to read data from. The main file with all the journals together really give us the latest picture of our data.
 
@@ -52,7 +53,8 @@ as well as the journal file.
 >     files <- getDirectoryContents dp
 >     return [ read (Data.Text.unpack id)
 >            | file <- files
->            , id <- maybeToList (stripSuffix (Data.Text.pack ".header") (Data.Text.pack file))
+>            , id <- maybeToList (stripSuffix (Data.Text.pack ".header") 
+>               (Data.Text.pack file))
 >            ]
 >     -- return a list of JIds
 > 
@@ -109,7 +111,6 @@ as well as the journal file.
 > writeHeader j = do
 >   let s = encode (oldBlocks j)
 >   FH.writeAll (hHandle j) s
-> \end{code}
 > 
 > -- | Reads the header information from the header file
 > readHeader :: FH.FHandle -> IO (Map Integer Integer)
@@ -121,21 +122,17 @@ as well as the journal file.
 > -- | Write to a journal given block number and blockData
 > writeToJournal :: Journal -> Integer -> BS.ByteString -> IO Journal
 > writeToJournal j bn bd = do
->                             {-let d = Map.lookup bn (oldBlocks j) -}
->                             {-case d of-}
->                                 {-Just _ -> return j-}
->                                 {-Nothing -> do -}
->                                              val <- FH.appendBlock  (jHandle j) bd
->                                              let newMap = insert bn val (oldBlocks j)
->                                              let fJournal = Journal { journalID = journalID j
->                                                                     , hHandle = hHandle j
->                                                                     , jHandle = jHandle j
->                                                                     , dHandle = dHandle j
->                                                                     , oldBlocks = newMap
->                                                                     }
->                                              writeHeader fJournal
->                                              return fJournal 
-> 
+>  val <- FH.appendBlock  (jHandle j) bd
+>  let newMap = insert bn val (oldBlocks j)
+>  let fJournal = Journal { journalID = journalID j
+>                      , hHandle = hHandle j
+>                      , jHandle = jHandle j
+>                      , dHandle = dHandle j
+>                      , oldBlocks = newMap
+>                      }
+>  writeHeader fJournal
+>  return fJournal 
+
 > -- | To zero out the journal file
 > resetJournal :: Journal -> IO ()
 > resetJournal = FH.truncateF . jHandle
@@ -151,16 +148,16 @@ as well as the journal file.
 > -- Read every block from the journal and write to the database 
 > replayJournal :: Journal -> IO ()
 > replayJournal j = do
->                     let li = toAscList $ oldBlocks j --potential speedup if ascending?
->                     sequence_ $ Prelude.map readAndWrite li
->                     where
->                       readAndWrite :: (Integer,Integer) -> IO()
->                       readAndWrite (bn,jbn) = do
->                                           maybebd <- readFromJournal j bn
->                                           case maybebd of 
->                                             Just bd -> FH.writeBlock (dHandle j) bn bd
->                                             Nothing -> return ()
-> 
+>  let li = toAscList $ oldBlocks j --potential speedup if ascending?
+>  sequence_ $ Prelude.map readAndWrite li
+>  where
+>  readAndWrite :: (Integer,Integer) -> IO()
+>  readAndWrite (bn,jbn) = do
+>          maybebd <- readFromJournal j bn
+>          case maybebd of 
+>              Just bd -> FH.writeBlock (dHandle j) bn bd
+>              Nothing -> return ()
+
 > test = do 
 >     d <- FH.openF "abc.b" ReadWriteMode 1024   -- Truncates to zero length file 
 >     j <- newJournal d

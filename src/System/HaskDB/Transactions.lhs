@@ -66,9 +66,12 @@ Here is a function which deposits x amount to the given account.
 
 Lets see how this is translated to explicit notation without do notation. 
 
-ReadBlock a (\block -> return block >>= (\block -> WriteBlock a (increase block x) (return () )))
-= ReadBlock a (\block -> Done block  >>= (\block -> WriteBlock a (increase block x) (return () )))
-= ReadBlock a (\block -> WriteBlock a (increase block x) (return ()) )
+> -- ReadBlock a (\block -> return block >>= 
+> --   (\block -> WriteBlock a (increase block x) (return () )))
+> -- ReadBlock a (\block -> Done block  >>= 
+> --   (\block -> WriteBlock a (increase block x) (return () )))
+> -- ReadBlock a (\block -> WriteBlock a (increase block x) (return ()) )
+
 Looks like it got transformed to whatever we wanted. 
 It was a liitle frustrating to write return while writing ReadBlock and WriteBlock. So lets define feh helpers to help us avoiding the repetitions. 
 
