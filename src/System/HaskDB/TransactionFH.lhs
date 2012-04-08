@@ -88,9 +88,9 @@
 >       ReadOnly -> return Nothing
 >       ReadWrite _ j -> JU.readFromJournal j bn
 > 
-> > -- | First , if it has its own journal , then it should read from that
-> > -- else read a block from the most recent journal that contains it 
-> > -- else read it from the database
+> -- | First , if it has its own journal , then it should read from that
+> -- else read a block from the most recent journal that contains it 
+> -- else read it from the database
 > 
 > 
 > readBlockJ :: TFile -> BlockNumber -> Transaction -> IO BS.ByteString

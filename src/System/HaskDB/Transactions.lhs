@@ -217,9 +217,6 @@ All the journals of the transactions get aggregated over time which might result
 >                 Nothing -> True 
 >                 Just (id,fv) -> fv >= jid 
 >
-> cleaner :: TFIle -> IO ()
-> cleaner fh = undefined
-> 
 > 
 
 Helpers : 

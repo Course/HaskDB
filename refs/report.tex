@@ -1,0 +1,216 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage{graphicx}
+\usepackage{alltt}
+\usepackage{color}
+\usepackage{fancyhdr}
+\usepackage{listings}
+\usepackage{multicol}
+\usepackage{hyperref}
+\pagestyle{fancy}
+\definecolor{gray_ulisses}{gray}{0.55}
+\definecolor{castanho_ulisses}{rgb}{0.71,0.33,0.14}
+\definecolor{preto_ulisses}{rgb}{0.41,0.20,0.04}
+\definecolor{green_ulises}{rgb}{0.2,0.75,0}
+\lstdefinelanguage{HaskellU}
+{
+	basicstyle=\ttfamily\scriptsize,
+	%backgroundcolor=\color{yellow},
+	%frameshape={RYRYNYYYY}{yny}{yny}{RYRYNYYYY}, %contornos... muito nice...
+	sensitive=true,
+	morecomment=[l][\color{gray_ulisses}\scriptsize]{--},
+	morecomment=[s][\color{gray_ulisses}\scriptsize]{\{-}{-\}},
+	morestring=[b]",
+	stringstyle=\color{red},
+	showstringspaces=false,
+	numbers=left,
+	firstnumber=\thelstnumber,
+	numberstyle=\tiny,
+	numberblanklines=true,
+	showspaces=false,
+	showtabs=false,
+	xleftmargin=15pt,
+	xrightmargin=-20pt,
+	emph=
+	{[2] return,fromJust,readBlockT,writeBlockT,runTransaction,retryTransaction,sequencer,runT,transfer,deposit
+	},
+	emphstyle={[2]\color{blue}},
+		emph=
+	{[1] BS,ByteString , TFile,BlockNumber,FT,Maybe,IO 
+	},
+	emphstyle={[1]\color{castanho_ulisses}},
+	emph=
+	{[3]
+		case,class,data,deriving,do,else,if,import,in,infixl,infixr,instance,let,
+		module,of,primitive,then,type,where,ReadBlock,WriteBlock,Done,Nothing,Just,True,False,
+	},
+	emphstyle={[3]\color{preto_ulisses}\textbf},
+	emph=
+	{[4] 
+	},
+	emphstyle={[4]\color{green_ulises}\textbf}
+}
+
+\lstnewenvironment{code}
+{\hrulefill \lstset{language=HaskellU}}
+{\smallskip}
+
+\title{ Concurrent Disk-Based Transactions in Haskell}
+\author{Satvik Chauhan \and Pankaj More}
+\date{{\small \today}}
+%
+\begin{document}
+\maketitle
+%
+\begin{abstract}
+Transactions form an integral part of any multi-user concurrent database system. Most databases implement transactions by various locking mechanism.
+In this project , we present a lock free composable file transaction system implemented in a high level functional programming language , Haskell.Our library allows easy composition of transactions and running them as a single atomic transaction thus providing a powerful abstraction in the programmer's toolkit. The implementation is not only highly concurrent but also non blocking as there are no locks on files. We have cleverly exploited the space efficient probabilistic data structure called Bloom Filters to keep primary memory requirements low.
+
+
+\em{\textbf{Keywords  :} Concurrency , Transactions , Databases , Haskell}
+
+\end{abstract}
+%
+\section{Introduction}
+A Transaction is a group of operations combined into a logical unit of work. Developer uses transactions to control and maintain the consistency and integrity of each action in a transaction, despite errors that might occur inthe system either due to concurrency or hardware failure. In database context a transaction on a database is considered to be set of operations performed such that database is in a consistent state before and after the transaction and in case of failure the system must provide ways to rollback partial transactions to bring the database back into a consistent state. Transaction in the database environment mainly serve two purposes :
+\begin{enumerate}
+\item To provide reliable units of work that allow correct recovery from failures and keep a database consistent even in cases of system failure, when execution stops (completely or partially) and many operations upon a database remain uncompleted, with unclear status.
+\item To provide isolation between programs accessing a database concurrently. If this isolation is not provided the programs outcome are possibly erroneous.
+\end{enumerate}
+Transactions provide an "all-or-nothing" proposition, stating that each work-unit performed in a database must either complete in its entirety or have no effect whatsoever. Further, the system must isolate each transaction from other transactions, results must conform to existing constraints in the database, and transactions that complete successfully must get written to durable storage. Thus , even in case of hardware failure a transaction once commited must persist. A transaction is expected satisfy ACID guarantees. 
+\begin{itemize}
+
+
+\item \textbf{Atomicity} means a transaction can end only in two ways : either successfully , in which case all its effects are written to a durable storage and persist between power failures , or unsuccessfully , in which case it has no effect , it can be assumed that this transaction never happened. 
+\item \textbf{Consistency} just means that a transaction is written correctly, so that when it completes successfully, the database is in a consistent state.
+\item \textbf{Isolation} means that the transaction appears to execute completely alone, even if, in fact, other transactions are running simultaneously. In other words, transaction always sees a consistent snapshot of the database and is totally unaware of the changes made by other transactions which are running concurrently with it. 
+\item \textbf{Durability} means that a successful transaction's changes are permanent and persist in all possible sorts of failures. In practice this means to be written on disk. 
+\end{itemize}
+
+\pagebreak
+\section{Implementation Details}
+Here we will explain some important parts of our implementations. \\
+Lets try to capture the transaction into a datatype first. Here
+we are implementing a very basic version of transactions. So our
+transaction system only provide two type of operations to be performed
+on the file.
+\begin{enumerate}
+\item \textbf{ReadBlock} is to read the data from the given block number.
+\item \textbf{WriteBlock} is to write the given data on the block number provide.
+\end{enumerate}
+We can also think of adding operations like append block , modify block
+etc. , but to keep it simple we only support these two basic operations.
+Now lets look at the data definition of the File Transaction (FT) data
+type . \\
+\begin{code}
+-- | Transaction Datatype
+data FT a = 
+    Done a | 
+    ReadBlock BlockNumber (BS.ByteString -> FT a) | 
+    WriteBlock BlockNumber BS.ByteString (FT a)
+\end{code}
+ByteString is made explicit as all the data needs to be serialized to ByteString before writing.\\
+The types of ReadBlock and WriteBlock looks a little odd. We will see later how it helps in actually passing the continuations.
+Lets see the monad definiton of the FT datatype. \\
+\begin{code}
+-- | Monad Definition for the Transaction. 
+instance Monad FT where 
+    return = Done 
+    m >>= f = case m of 
+        Done a -> f a 
+        ReadBlock bn c -> ReadBlock bn (\i -> c i  >>= f) 
+        WriteBlock bn x c -> WriteBlock bn x (c >>= f)
+\end{code}
+Here we will see how the types of ReadBlock and WriteBlock actually help
+in our continuation passing style of programming. Lets see a simple
+example of interface our implementation provides .
+Consider the famous banking example for transactions. We want to
+transfer x fund from account A to account B.
+Lets assume that fund informations of A and B are stored in the same
+file at block number a and b respectively.
+First we will see the basic example to deposit amount to an account. 
+Here is a function which deposits x amount to the given account. \\
+\begin{code}
+deposit a x = do 
+      amount <- ReadBlock a return 
+      WriteBlock a (amount + x) (return ())
+\end{code}
+Lets see how this is translated to explicit notation without do
+notation. \\
+\begin{code}
+ ReadBlock a (\amount -> return amount >>= 
+   \amount -> WriteBlock a (amount + x) (return()))
+ ReadBlock a (\amount -> Done amount  >>= 
+   \amount -> WriteBlock a (amount + x) (return()))
+ ReadBlock a (\amount -> 
+   WriteBlock a (amount + x) (return()))
+\end{code}
+Looks like it got transformed to whatever we wanted. This is how continuation passing style actually works.
+It was a little frustrating to write return while writing ReadBlock and
+WriteBlock. So lets define some helpers to help us avoiding the
+repetitions. \\
+\begin{code}
+-- | readBlockT to be used inside the FT Monad 
+readBlockT :: BlockNumber -> FT BS.ByteString
+readBlockT = flip ReadBlock return 
+-- | writeBlockT to be used inside the FT Monad 
+writeBlockT :: BlockNumber -> BS.ByteString -> FT ()
+writeBlockT v x =  WriteBlock v x $ return () 
+\end{code}
+Now we want to actually perform the transactions satisfying all the ACID
+guarantees. So we need to write a fucntion to actually convert our
+Transactions from FT monad to IO monad and perform them.
+According to the semantics of a transaction , a transaction can either
+fail or succeed. So we should provide atleast two types of functions to
+run a transaction which are as follows : \\
+\begin{code}
+-- | Runs the given transaction on the file. 
+-- Transaction may fail in which case it returns Nothing.
+runTransaction :: FT a -> TFile -> IO (Maybe a)
+runTransaction = runT Nothing False
+-- | Runs the transaction on the file. 
+-- If transaction fails then reruns it
+-- with higher priority.
+retryTransaction :: FT a -> TFile -> IO a
+retryTransaction ft tFile = fromJust <$> 
+	runT Nothing True ft tFile 
+\end{code}
+
+At this point before implementing anything else we are interested in how
+we will be actiually using them. Here I will also introduce you to the
+power of composing two transactions and running them as one. Lets
+comeback to our backing example. \\
+\begin{code}
+transfer a b x = do 
+  deposit a (-x) 
+  deposit b x
+\end{code}
+
+Here is the function to remove x amount from account A and deposit it to
+the account B. We have implemented a very loose semantics here as to not
+check if A's balance is less than 0 etc. I just wanted to show the power
+of composing functions. Now we can just do runTransaction on transfer to
+run this transaction. \\
+\begin{code}
+runTransaction (transfer a b 100)
+\end{code}
+The semantics of runTransaction automatically
+takes care of all the possible failures and rollback in case of
+transaction failure.
+
+All the journals of the transactions get aggregated over time which might result in poor read performances over time. So we need to actually checkpoint the commited journals back to the database file. \\
+\begin{code}
+sequencer :: TFile -> IO () 
+\end{code}
+
+
+
+
+\bibliographystyle{IEEEbib}
+\begin{thebibliography}{10}
+\bibitem[1]{stm}Anthony Discolo, Tim Harris, Simon Marlow, Simon Peyton Jones, and Satnam Singh. Lock-free data structures using STMs in Haskell. In Eighth International Symposium on Functional and Logic Programming (FLOPS’06), April 2006.
+\bibitem[2]{sqlite}Atomic Commit in sqlite , \url{http://www.sqlite.org/atomiccommit.html}
+
+
+
+\end{thebibliography}
+\end{document}
