@@ -6,7 +6,7 @@ Copy the original block to the Journal and try writing the changed block to the 
 Our current approach is based on an idea similar to Write Ahead Logging in Sqlite. Instead of writing the "old data" to journal , we write the new data first to the Journal and then eventually move it to the main file. But this approach means the main file alone is no more the only place to read data from. The main file with all the journals together really give us the latest picture of our data.
 
 A Journal is a temporary file defined per transaction.It is used to keep track of the blocks changed by a transaction. It stores the new data that needs to be eventually written to the main database. 
-Instead of storing the old data into the Journal and using it to restore the datbase in case of data inconsistency
+Instead of storing the old data into the Journal and using it to restore the database in case of data inconsistency
 
 \begin{code}
 module System.HaskDB.Journal where
@@ -27,7 +27,6 @@ import Data.IORef
 
 \end{code}
 
-Some literate haskell here
 
 \begin{code}
 type JHandle = FH.FHandle
@@ -35,7 +34,6 @@ type OldBlock = Integer
 type JId = Integer
 \end{code}
 
-Some more literate haskell
 
 \begin{code}
 data Journal = Journal { journalID :: JId      -- filename prefix of the Journal
@@ -50,7 +48,6 @@ closeJournal j = do
 
 \end{code}
 
-some more literate haskell
 
 \begin{code}
 findJournals :: FilePath -> IO [JId]
