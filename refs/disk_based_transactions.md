@@ -1,24 +1,4 @@
-
-# CS240h: Functional systems in Haskell
-
-* I'm David Mazi&egrave;res
-    * Spent most of my career working on OSes, Systems, and Security
-    * Previously used C++ and C, but started using Haskell a couple of
-      years ago
-    * Course partly inspired by my experience learning Haskell
-
-* Also teaching this class: Bryan O'Sullivan
-    * Has implemented many key Haskell libraries in widespread use
-      today
-    * Co-wrote [*Real World Haskell*][RWH], a great non-theoretical
-      intro book
-    * Also plenty of systems experience (e.g., Linux early userspace
-      code)
-    
-* Course assistant: David Terei
-    * Implemented LLVM backend and type-safe extensions that ship
-      with GHC Haskell compiler
-    * Currently using Haskell for security research here at Stanford
+# Concurrent Disk Based Transactions in Haskell
 
 # Why Haskell?
 
@@ -39,64 +19,6 @@
     * Concurrent programming abstractions resistant to data races
 
 * Haskell lets you realize new types of functionality (DIFC, STM, ...)
-
-# Why take CS240h?
-
-* Learn to build systems in Haskell with reduced upfront cost
-    * Historically, Haskell was a vehicle for language research.<br>
-      The history is reflected in how the language is usually taught
-    * CS240h will present the language more from a systems perspective
-
-* Learn new, surprising, and effective programming techniques
-    * There are more than enough to fill a 10-week quarter
-    * Often only documented in more theoretical papers
-
-* **You enjoy programming**
-    * With Haskell, you will think about programming in new ways
-
-* You sometimes get frustrated with other languages
-    * Maybe you've wanted to design a new language, or tend to
-      "max-out" existing language features (macros, templates,
-      overloading, etc.)
-    * Things that require changes to most languages can be done in a
-      library with Haskell
-
-# Administrivia
-
-* We assume some of you may have toyed with Haskell, others not
-* First week cover Haskell basics
-    * If you haven't used Haskell, you should supplement by reading
-      parts of [Bryan's book][RWH] and/or on-line tutorials (such as
-      <http://www.haskell.org/tutorial/>).
-    * If you have used Haskell, you may still learn some things from
-      these lectures
-      
-* Rest of term covers more advanced techniques
-* Final grade will be based on several factors
-    1. Two small warm-up solo programming exercises
-    1. A large final project & presentation
-    1. Class attendance and participation
-
-# Final project
-
-* Final project is most important component of grade
-* Consists of a Haskell-related project of your choice
-    * Form project team of 1-3 people
-    * Meet with one of the instructors to discuss project
-    * Complete and evaluate project and turn in short paper
-    * Final exam will be mini-conference where you present your
-      work<br>**(Make sure you are here for exam December 15)**
-
-* Class home page has list of
-  [suggested projects](http://cs240h.scs.stanford.edu/labs/project.html)
-  (we will add more)
-* We encourage overlap of CS240h project with your research
-    * The programming techniques you learn in CS240h are likely
-      orthogonal to whatever research you are doing
-* We are okay with CS240h project also serving as another class
-  project,<br>**provided the other instructor and all teammates (from
-  both classes) approve**
-
 
 # Getting started with Haskell
 

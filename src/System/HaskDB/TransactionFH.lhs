@@ -1,3 +1,7 @@
+\documentclass{article}
+%include lhs2TeX.fmt
+\begin{document}
+
 \begin{code}
 module System.HaskDB.TransactionFH where 
 
@@ -87,10 +91,14 @@ readBlockFromOwnJournal tf bn d = do
     case (tType d) of 
       ReadOnly -> return Nothing
       ReadWrite _ j -> JU.readFromJournal j bn
+\end{code}
 
--- | First , if it has its own journal , then it should read from that
--- else read a block from the most recent journal that contains it 
--- else read it from the database
+> -- | First , if it has its own journal , then it should read from that
+> -- else read a block from the most recent journal that contains it 
+> -- else read it from the database
+
+\begin{code}
+
 readBlockJ :: TFile -> BlockNumber -> Transaction -> IO BS.ByteString
 readBlockJ tf bn d = do
   r <- readBlockFromOwnJournal tf bn d
@@ -209,3 +217,4 @@ getBlock bl = do
         
 
 \end{code}
+\end{document}
