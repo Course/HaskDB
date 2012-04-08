@@ -1,20 +1,6 @@
 > {-# LANGUAGE NoMonomorphismRestriction #-}
 
 > -- | File Transactions Module .
-> --  Every write Transaction is first written to a journal File. Every commited
-> --  journal file ensures a valid transaction. A queue of bloomFilter of the 
-> --  changed blocks per journal file is maintained. A pure read Transaction 
-> --  never blocks. When a transaction finishes it checks the file version when 
-> --  the transaction started and when it finishes are the same. If not then it 
-> --  checks whether the blocks read and the blocks changed since it started are
-> --  disjoint or a higher priority transaction is not going to fail if this 
-> --  transaction succeeds. If any of the above happen then transaction succeeds
-> --  and commits the journal file and adds the newly calculted bloomfilter to 
-> --  the queue. This operation is ensured to be atomic. If any of the above is 
-> --  not ensured then transaction is said to be failed . It is added to the 
-> --  failedQueue. The failed queue is used to prevent the starvation. The 
-> --  priority of a failed process increases with time which with a heuristic 
-> --  is used to decide when a process commit succeeds . 
 > module System.HaskDB.Transactions (
 >    runTransaction 
 >    , retryTransaction
@@ -24,7 +10,6 @@
 >    , closeTF 
 >    , sequencer
 >    ) where 
-
 > import Control.Concurrent 
 > import qualified Data.ByteString as BS 
 > import qualified System.HaskDB.FileHandling as FH 
@@ -41,13 +26,24 @@
 > import Control.Applicative
 > import Control.Exception
 
-Every Transaction is represented as the following datatype . 
+The main task is to capture the transaction into a datatype first. Here we are implementing a very basic version of transactions. So our transaction system only provide two type of operations to be performed on the file. 
+
+* **ReadBlock** is to read the data from the given block number. 
+* **WriteBlock** is to write the given data on the block number provide. 
+
+We can also think of adding operations like append block , modify block etc. , but to keep it simple we only support these two basic operations. 
+Now lets look at the data definition of the File Transaction (FT) data type . 
 
 > -- | Transaction DataType 
 > data FT a = 
->     Done a |
->     ReadBlock BlockNumber (BS.ByteString -> FT a) |
->     WriteBlock BlockNumber BS.ByteString (FT a)
+>     Done a | -- ^ Any value in the FT monad will be captured in Done a. 
+>     ReadBlock BlockNumber (BS.ByteString -> FT a) | -- ^ FT a here represents
+> -- rest of the computation. This follows from the continuation passing style.
+>     WriteBlock BlockNumber BS.ByteString (FT a) -- ^ FT a here is similar to 
+> -- above to have continuations. 
+
+Dont be scared from the types of ReadBlock and WriteBlock. We will see later how it helps in actually passing the continuations.
+Lets see the monad definiton of the FT datatype.
 
 > -- | Monad Definition for the Transaction. 
 > instance Monad FT where 
@@ -57,13 +53,34 @@ Every Transaction is represented as the following datatype .
 >         ReadBlock bn c -> ReadBlock bn (\i -> c i  >>= f) 
 >         WriteBlock bn x c -> WriteBlock bn x (c >>= f)
 
+Here we will see how the types of ReadBlock and WriteBlock actually help in our continuation passing style of programming. Lets see a simple example of interface our implementation provides . 
+Consider the famous banking example for transactions. We want to transfer x fund from account A to account B.
+Lets assume that fund informations of A and B are stored in the same file at block number a and b respectively.
+Here is a function which deposits x amount to the given account. 
+
+> deposit a x = do 
+>       block <- ReadBlock a return 
+>       WriteBlock a (increase block x) (return ())
+>   where 
+>        increase bs x = undefined -- amount bs = amount bs + x 
+
+Lets see how this is translated to explicit notation without do notation. 
+
+ReadBlock a (\block -> return block >>= (\block -> WriteBlock a (increase block x) (return () )))
+= ReadBlock a (\block -> Done block  >>= (\block -> WriteBlock a (increase block x) (return () )))
+= ReadBlock a (\block -> WriteBlock a (increase block x) (return ()) )
+Looks like it got transformed to whatever we wanted. 
+It was a liitle frustrating to write return while writing ReadBlock and WriteBlock. So lets define feh helpers to help us avoiding the repetitions. 
+
 > -- | readBlockT to be used inside the FT Monad 
 > readBlockT :: BlockNumber -> FT BS.ByteString
 > readBlockT = flip ReadBlock return 
-
 > -- | writeBlockT to be used inside the FT Monad 
 > writeBlockT :: BlockNumber -> BS.ByteString -> FT ()
 > writeBlockT v x =  WriteBlock v x $ return () 
+
+Now we want to actually perform the transactions satisfying all the ACID guarantees. So we need to write a fucntion to actually convert our Transactions from FT monad to IO monad and perform them. 
+According to the semantics of a transaction , a transaction can either fail or succeed. So we should provide atleast two types of functions to run a transaction which are as follows :
 
 > -- | Runs the given transaction on the file. 
 > -- Transaction may fail in which case it returns Nothing.
@@ -79,20 +96,31 @@ Every Transaction is represented as the following datatype .
 >                  -> IO a
 > retryTransaction ft tFile = fromJust <$> runT Nothing True ft tFile 
 
+At this point before implementing anything else we are interested in how we will be actiually using them. Here I will also introduce you to the power of composing two transactions and running them as one. Lets comeback to our backing example. 
+
+> transfer a b x = do 
+>   deposit a (-x) 
+>   deposit b x 
+
+Here is the function to remove x amount from account A and deposit it to the account B. We have implemented a very loose semantics here as to not check if A's balance is less than 0 etc.  I just wanted to show the power of composing functions. Now we can just do runTransaction on transfer to run this transaction. The semantics of runTransaction automatically takes care of all the possible failures and rollback in case of transaction failure. 
+Now comes the core function of our implementation which actually perform all the actions. 
+
 > runT :: Maybe Integer -- Nothing if transaction never failed else Just id 
->      -> Bool  -- True if the transaction is to be retried in case of failure 
+>      -> Bool  -- True if the transaction is to be retried in case of failure
 >      -> FT a  -- Transaction 
 >      -> TFile -- The File on which to run this transaction 
 >      -> IO (Maybe a)  
 > 
 > runT  failure retry ft tFile = do 
+>     -- Add the transaction to the transaction queue and get the current 
+>     -- fileversion. This has to be removed after commit is performed. 
 >     (tid,fileVersion) <- withSynch (FH.synchVar $ fHandle tFile) 
 >                                    (addToTransactionQ tFile)
->     print fileVersion
->     transFile <- newTransactionFile tid
+>     let transFile = newTransactionFile tid
+>     -- Performs the transaction on the journal file and commits. If commit 
+>     -- succeeded then return Just output else Nothing 
 >     maybeOut <- withFile transFile $ runAndCommit fileVersion tFile ft 
 >     atomicModifyIORef (transactions tFile) $ \q -> (deleteFromQueue q tid, ())
->     if isNothing maybeOut then print "FAILED" else print "SUCCESS"
 >     if retry then retryIfFailed failure maybeOut fileVersion tid ft tFile 
 >         else return maybeOut
 >   where 
@@ -115,10 +143,8 @@ Every Transaction is represented as the following datatype .
 >         out <- trans ft tFile $ Transaction (BlockList [] 8 fh) ReadOnly
 >         commit fv tFile out 
 >
->     newTransactionFile :: Integer -> IO String -- Uniqueness not guaranteed 
->     newTransactionFile tid = do  
->         let tf = (show tid) ++ ".trans"
->         return tf
+>     newTransactionFile :: Integer -> String
+>     newTransactionFile tid = (show tid) ++ ".trans"
 >
 >     addToTransactionQ :: TFile -> IO (Integer,FileVersion)
 >     addToTransactionQ fh = do 
@@ -145,24 +171,14 @@ Every Transaction is represented as the following datatype .
 >         val <- readBlockJ fh bn d
 >         rblcks <- addBlock (fromIntegral bn) (rBlocks d)
 >         trans (c val) fh $ d {rBlocks = rblcks}
->     -- Experiment with the hashfunction and number of bits 
+>     -- Experiment with the hashfunction and number of bits.  
 >     trans (WriteBlock bn x c) fh d = do 
 >         rw <- rToRw d (BF.emptyB (cheapHashes 20) 4096) (newJournal (fHandle fh))
 >         let newBl = BF.insertB bn (bloom $ tType rw)  
 >         j <- writeToJournal (journal $ tType rw) bn x
 >         trans c fh (rw {tType = (tType rw) {bloom = newBl,journal = j}} )
 
-Can be implemented in 2 ways . 
-
-1. Keep Restoring Journal and popping them from the Queue until you find a
-   journal  which has a version on which we have a currently active 
- transaction running . Yield () .
-2. Keep Restoring Journal without popping from the queue and also keep a copy 
-   of journals restored. Now Another thread will wait until there are not any
-   transactions which have started on or before that version of the journal and
-   delete the journal from the queue and also the journal file . 
-The Second version requires extra memory .
-I am implementing the first Version here 
+All the journals of the transactions get aggregated over time which might result in poor read performances over time. So we need to actually checkpoint the commited journals back to the database file. 
 
 > sequencer :: TFile -> IO () 
 > sequencer fh = do 
