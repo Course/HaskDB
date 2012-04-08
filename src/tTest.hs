@@ -17,6 +17,7 @@ fttest = do
     writeBlockT 2 $ rand2 4096 
     writeBlockT 3 $ rand 4096 
     writeBlockT 4 $ rand2 4096 
+    writeBlockT 0 $ rand2 4096 
     readBlockT 0 
 
 fttest2 = do 
@@ -27,18 +28,17 @@ fttest3 = do
 
 main = do 
     newDB <- openTF "fttest.dat"
-    forkIO $ runTransaction fttest newDB >> return ()
-    forkIO $ runTransaction fttest newDB >> return ()
-    forkIO $ runTransaction fttest newDB >> return ()
-    forkIO $ runTransaction fttest newDB >> return ()
-    forkIO $ runTransaction fttest newDB >> return ()
-    forkIO $ runTransaction fttest newDB >> return ()
-    forkIO $ runTransaction fttest newDB >> return ()
-    forkIO $ runTransaction fttest newDB >> return ()
-    forkIO $ runTransaction fttest newDB >> return ()
-    forkIO $ runTransaction fttest newDB >> return ()
-    forkIO $ runTransaction fttest newDB >> return ()
-    forkIO $ runTransaction fttest newDB >> return ()
+    forkIO $ runTransaction fttest newDB >>= print 
+    forkIO $ retryTransaction fttest newDB >>= print 
+    forkIO $ retryTransaction fttest newDB >>= print 
+    forkIO $ retryTransaction fttest newDB >>= print 
+    forkIO $ retryTransaction fttest newDB >>= print 
+    forkIO $ retryTransaction fttest newDB >>= print 
+    forkIO $ retryTransaction fttest newDB >>= print 
+    forkIO $ retryTransaction fttest newDB >>= print 
+    forkIO $ retryTransaction fttest newDB >>= print 
+    forkIO $ retryTransaction fttest newDB >>= print 
+    forkIO $ retryTransaction fttest newDB >>= print 
     t <- getFileVersion (fHandle  newDB)
     print t
     {-sequencer newDB-}

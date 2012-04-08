@@ -1,5 +1,7 @@
-> {-# LANGUAGE NoMonomorphismRestriction #-}
+Transactions.lhs
+================================================
 
+> {-# LANGUAGE NoMonomorphismRestriction #-}
 > -- | File Transactions Module .
 > module System.HaskDB.Transactions (
 >    runTransaction 
@@ -32,7 +34,9 @@ The main task is to capture the transaction into a datatype first. Here we are i
 * **WriteBlock** is to write the given data on the block number provide. 
 
 We can also think of adding operations like append block , modify block etc. , but to keep it simple we only support these two basic operations. 
+
 Now lets look at the data definition of the File Transaction (FT) data type . 
+
 
 > -- | Transaction DataType 
 > data FT a = 
@@ -43,6 +47,7 @@ Now lets look at the data definition of the File Transaction (FT) data type .
 > -- above to have continuations. 
 
 Dont be scared from the types of ReadBlock and WriteBlock. We will see later how it helps in actually passing the continuations.
+
 Lets see the monad definiton of the FT datatype.
 
 > -- | Monad Definition for the Transaction. 
@@ -54,8 +59,11 @@ Lets see the monad definiton of the FT datatype.
 >         WriteBlock bn x c -> WriteBlock bn x (c >>= f)
 
 Here we will see how the types of ReadBlock and WriteBlock actually help in our continuation passing style of programming. Lets see a simple example of interface our implementation provides . 
+
 Consider the famous banking example for transactions. We want to transfer x fund from account A to account B.
+
 Lets assume that fund informations of A and B are stored in the same file at block number a and b respectively.
+
 Here is a function which deposits x amount to the given account. 
 
 > deposit a x = do 
@@ -66,13 +74,13 @@ Here is a function which deposits x amount to the given account.
 
 Lets see how this is translated to explicit notation without do notation. 
 
-> -- ReadBlock a (\block -> return block >>= 
-> --   (\block -> WriteBlock a (increase block x) (return () )))
-> -- ReadBlock a (\block -> Done block  >>= 
-> --   (\block -> WriteBlock a (increase block x) (return () )))
-> -- ReadBlock a (\block -> WriteBlock a (increase block x) (return ()) )
+> --   (\ block -> WriteBlock a (increase block x) (return () )))
+> -- ReadBlock a (\ block -> Done block  >>= 
+> --   (\ block -> WriteBlock a (increase block x) (return () )))
+> -- ReadBlock a (\ block -> WriteBlock a (increase block x) (return ()) )
 
 Looks like it got transformed to whatever we wanted. 
+
 It was a liitle frustrating to write return while writing ReadBlock and WriteBlock. So lets define feh helpers to help us avoiding the repetitions. 
 
 > -- | readBlockT to be used inside the FT Monad 
@@ -83,6 +91,7 @@ It was a liitle frustrating to write return while writing ReadBlock and WriteBlo
 > writeBlockT v x =  WriteBlock v x $ return () 
 
 Now we want to actually perform the transactions satisfying all the ACID guarantees. So we need to write a fucntion to actually convert our Transactions from FT monad to IO monad and perform them. 
+
 According to the semantics of a transaction , a transaction can either fail or succeed. So we should provide atleast two types of functions to run a transaction which are as follows :
 
 > -- | Runs the given transaction on the file. 
@@ -106,6 +115,7 @@ At this point before implementing anything else we are interested in how we will
 >   deposit b x 
 
 Here is the function to remove x amount from account A and deposit it to the account B. We have implemented a very loose semantics here as to not check if A's balance is less than 0 etc.  I just wanted to show the power of composing functions. Now we can just do runTransaction on transfer to run this transaction. The semantics of runTransaction automatically takes care of all the possible failures and rollback in case of transaction failure. 
+
 Now comes the core function of our implementation which actually perform all the actions. 
 
 > runT :: Maybe Integer -- Nothing if transaction never failed else Just id 
@@ -211,6 +221,9 @@ All the journals of the transactions get aggregated over time which might result
 > cleaner fh = undefined
 > 
 > 
+
+Helpers : 
+
 > commit :: FileVersion -> TFile -> (a,Transaction) -> IO (Maybe a) 
 > commit  oldFV fh (output,trans) = do 
 >     -- synch is used to prevent 2 commits from interleaving 
