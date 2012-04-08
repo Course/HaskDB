@@ -123,14 +123,9 @@ readBlockJ tf bn d = do
 
 -- | Returns True if there is a block from bli which is probably in the  list of bloom filters
 checkF :: [JBloom] -> BlockList -> IO Bool
-{-checkF jbl bli = any id [elemB bn jb | jb <- jbl , bn <- bli]-}
 checkF [] bli =  return False 
 checkF js bli = do 
-    --print $ checkOneBlock js 0
     (f,rest) <- getBlock bli 
-    print f
-    --print $ "Bloom List " ++ (show js)
-    --print $ "Block List " ++ (show (blocks bli))
     case f of 
         Just x -> if checkOneBlock js (toInteger x) then return True else checkF js rest 
         Nothing -> return False 
@@ -166,9 +161,7 @@ checkFailure oldfv newfv tf bli = do
             q <- readIORef (jQueue tf)
             let jli = getJInfoList oldfv newfv q
             let jbl = map (getBloomFilter) jli
-            print $ map getfv jli 
             f <- checkF jbl bli
-            print f
             return f
 
 -- | Interface to maintain list of read Blocks 
