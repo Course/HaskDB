@@ -203,6 +203,10 @@ All the journals of the transactions get aggregated over time which might result
 >             case front of 
 >                 Nothing -> True 
 >                 Just (id,fv) -> fv >= jid 
+>
+> cleaner :: TFIle -> IO ()
+> cleaner fh = undefined
+> 
 > 
 > commit :: FileVersion -> TFile -> (a,Transaction) -> IO (Maybe a) 
 > commit  oldFV fh (output,trans) = do 
