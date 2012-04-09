@@ -8,13 +8,14 @@
 \usepackage{hyperref}
 \pagestyle{fancy}
 \definecolor{gray_ulisses}{gray}{0.55}
+\definecolor{lightgray}{gray}{0.95}
 \definecolor{castanho_ulisses}{rgb}{0.71,0.33,0.14}
 \definecolor{preto_ulisses}{rgb}{0.41,0.20,0.04}
 \definecolor{green_ulises}{rgb}{0.2,0.75,0}
 \lstdefinelanguage{HaskellU}
 {
 	basicstyle=\ttfamily\scriptsize,
-	%backgroundcolor=\color{yellow},
+	backgroundcolor=\color{lightgray},
 	%frameshape={RYRYNYYYY}{yny}{yny}{RYRYNYYYY}, %contornos... muito nice...
 	sensitive=true,
 	morecomment=[l][\color{gray_ulisses}\scriptsize]{--},
@@ -23,7 +24,7 @@
 	stringstyle=\color{red},
 	showstringspaces=false,
 	numbers=left,
-	firstnumber=\thelstnumber,
+	firstnumber=last,
 	numberstyle=\tiny,
 	numberblanklines=true,
 	showspaces=false,
@@ -32,16 +33,16 @@
 	xrightmargin=-20pt,
 	emph=
 	{[2] return,fromJust,readBlockT,writeBlockT,runTransaction,retryTransaction,sequencer,runT,transfer,deposit
-	},
+,sync,open,close,readBlock,writeBlock,get,put,closeFile,openFile,readB,writeB,flushBuffer	},
 	emphstyle={[2]\color{blue}},
 		emph=
-	{[1] BS,ByteString , TFile,BlockNumber,FT,Maybe,IO 
+	{[1] BS,ByteString , TFile,BlockNumber,FT,Maybe,IO ,FilePath,Eq,Show,Monad,Handle,Mode,State,TestDisk,Backend,Int
 	},
 	emphstyle={[1]\color{castanho_ulisses}},
 	emph=
 	{[3]
-		case,class,data,deriving,do,else,if,import,in,infixl,infixr,instance,let,
-		module,of,primitive,then,type,where,ReadBlock,WriteBlock,Done,Nothing,Just,True,False,
+		case,class,data,deriving,do,type,else,if,import,in,infixl,infixr,instance,let,
+		module,of,primitive,then,type,where,ReadBlock,WriteBlock,Done,Nothing,Just,True,False
 	},
 	emphstyle={[3]\color{preto_ulisses}\textbf},
 	emph=
@@ -50,8 +51,8 @@
 	emphstyle={[4]\color{green_ulises}\textbf}
 }
 
-\lstnewenvironment{code}
-{\hrulefill \lstset{language=HaskellU}}
+\lstnewenvironment{code}[1][]
+{\hrulefill \lstset{language=HaskellU,#1}}
 {\smallskip}
 
 \title{ Concurrent Disk-Based Transactions in Haskell}
@@ -101,7 +102,8 @@ We can also think of adding operations like append block , modify block
 etc. , but to keep it simple we only support these two basic operations.
 Now lets look at the data definition of the File Transaction (FT) data
 type . \\
-\begin{code}
+\begin{code}[name=Transactions]
+-- Transactions.lhs
 -- | Transaction Datatype
 data FT a = 
     Done a | 
@@ -111,7 +113,8 @@ data FT a =
 ByteString is made explicit as all the data needs to be serialized to ByteString before writing.\\
 The types of ReadBlock and WriteBlock looks a little odd. We will see later how it helps in actually passing the continuations.
 Lets see the monad definiton of the FT datatype. \\
-\begin{code}
+\begin{code}[name=Transactions]
+-- Transactions.lhs
 -- | Monad Definition for the Transaction. 
 instance Monad FT where 
     return = Done 
@@ -136,10 +139,12 @@ deposit a x = do
 \end{code}
 Lets see how this is translated to explicit notation without do
 notation. \\
-\begin{code}
- ReadBlock a (\amount -> return amount >>= 
+\begin{code}[stepnumber=2]
+ ReadBlock a return >>= (\amount -> WriteBlock a 
+   (amount +x) (return()))
+ ReadBlock a (\i -> return i >>= 
    \amount -> WriteBlock a (amount + x) (return()))
- ReadBlock a (\amount -> Done amount  >>= 
+ ReadBlock a (\i -> Done i  >>= 
    \amount -> WriteBlock a (amount + x) (return()))
  ReadBlock a (\amount -> 
    WriteBlock a (amount + x) (return()))
@@ -148,7 +153,8 @@ Looks like it got transformed to whatever we wanted. This is how continuation pa
 It was a little frustrating to write return while writing ReadBlock and
 WriteBlock. So lets define some helpers to help us avoiding the
 repetitions. \\
-\begin{code}
+\begin{code}[name=Transactions]
+-- Transactions.lhs
 -- | readBlockT to be used inside the FT Monad 
 readBlockT :: BlockNumber -> FT BS.ByteString
 readBlockT = flip ReadBlock return 
@@ -156,13 +162,20 @@ readBlockT = flip ReadBlock return
 writeBlockT :: BlockNumber -> BS.ByteString -> FT ()
 writeBlockT v x =  WriteBlock v x $ return () 
 \end{code}
+Now the above deposit function can easily be written as :\\
+\begin{code}
+deposit a x = do 
+      amount <- readBlockT a 
+      writeBlockT a (amount + x)
+\end{code}
 Now we want to actually perform the transactions satisfying all the ACID
 guarantees. So we need to write a fucntion to actually convert our
 Transactions from FT monad to IO monad and perform them.
 According to the semantics of a transaction , a transaction can either
 fail or succeed. So we should provide atleast two types of functions to
 run a transaction which are as follows : \\
-\begin{code}
+\begin{code}[name=Transactions]
+-- Transactions.lhs
 -- | Runs the given transaction on the file. 
 -- Transaction may fail in which case it returns Nothing.
 runTransaction :: FT a -> TFile -> IO (Maybe a)
@@ -179,7 +192,7 @@ At this point before implementing anything else we are interested in how
 we will be actiually using them. Here I will also introduce you to the
 power of composing two transactions and running them as one. Lets
 comeback to our backing example. \\
-\begin{code}
+\begin{code}[name=Transactions]
 transfer a b x = do 
   deposit a (-x) 
   deposit b x
@@ -190,19 +203,91 @@ the account B. We have implemented a very loose semantics here as to not
 check if A's balance is less than 0 etc. I just wanted to show the power
 of composing functions. Now we can just do runTransaction on transfer to
 run this transaction. \\
-\begin{code}
+\begin{code}[name=Transactions]
+-- Transactions.lhs
 runTransaction (transfer a b 100)
 \end{code}
 The semantics of runTransaction automatically
 takes care of all the possible failures and rollback in case of
 transaction failure.
 
+runTransaction actually has to take care of lots of things. 
+\begin{itemize}
+\item Gets the file Version at which the transaction started.
+\item Performs the transactions on the Journal File 
+\item Then tries to commit the transaction.Checks the present version against the version at which it started. Here comes the idea of space efficient Bloom filters which are actually used to check whether the current transaction should commit successfully or not. This operation is in a critical section as it might leave the file in inconsistent state if it is not isolated. 
+\item return the output if transaction succeeds otherwise adds the failed transactions to the faailed queue. If retryTransaction was used then it again tries to perform the transaction. 
+\end{itemize}
 All the journals of the transactions get aggregated over time which might result in poor read performances over time. So we need to actually checkpoint the commited journals back to the database file. \\
-\begin{code}
+\begin{code}[name=Transactions]
+-- Transactions.lhs
 sequencer :: TFile -> IO () 
 \end{code}
+Sequencer actually does this. It checks for the commited journal files , writes them to the actual database and removes them. 
 
+\section{Future Improvements}
+None of the implementation is good for all the purposes. This implementation is good when we have lots of not colliding write transactions. If too many transaction collide and fail then we get poor concurrency. Thus other goal would be to add locking transactions which actually perform the write transactions sequentially similar to sqlite. 
+Other step will be in the direction of heavily testing the implementation. As it is always very difficult to test alone concurrent applications , we on the other hand also have lots of file operations. The quickcheck library in haskell provides very good testing mechanism but it requires to separate the backend from the IO monad and to provide an abstraction over it.
+Here is our basic approach of creating a pure interface to IO which actually dont perform IO but simulate the file-system. \\
+Here the basic idea is to capture the Backend in a typeclass. We will be exploiting the typefamilies extension of haskell to separate backend from the actual transaction implementation. This has great advantage to replace our backend with whatever kind we want.\\ 
+\begin{code}[name=Backend,firstnumber=1]
+-- Backend.hs
+class (Show a,Monad m) => Backend b m a | b -> m where 
+    data Handle :: * -> * 
+    type BlockNumber :: *  
+    open :: FilePath -> Mode -> m (Handle b)
+    close :: Handle b -> m () 
+    readBlock ::(Eq BlockNumber) =>Handle b -> BlockNumber -> m a 
+    writeBlock ::(Eq BlockNumber) =>Handle b -> BlockNumber -> a -> m ()
+    sync :: Handle b -> m ()
+\end{code}
+We have added the basic functions which we need in the transaction implementation. This greatly condense the side effects possible to only these functions.
 
+Here is the pure implementation of the file system in terms of state monad. \\
+\begin{code}[name=Backend,firstnumber=last]
+-- Backend.hs
+instance Show a => Backend (TestDisk a)  (State (TestDisk a)) a where 
+    data Handle (TestDisk a) = Handle FilePath 
+    type BlockNumber = Int 
+    open fp m = do 
+        disk <- get
+        put $ openFile disk fp m 
+        return $ Handle fp
+    close (Handle fp) = do 
+        disk <- get 
+        put $ closeFile disk fp
+    readBlock (Handle fp) bn = do 
+        t <- get 
+        case readB t fp bn buffers of 
+            Nothing -> error "Block Not Found"
+            Just a -> return a
+    writeBlock (Handle fp) bn a = do 
+        t <- get 
+        put $ writeB t fp bn a 
+    sync (Handle fp) = do  
+        t <- get 
+        put $ flushBuffer t fp 
+\end{code}
+Such an implementation allows us to test lots of the properties which are otherwise difficult to test. It also helps in explicitly specifying what kind of expectation and assumptions you make on your backend. \\
+The very simple representation of the disk simulated as a map between FilePath and File. 
+We also have buffers to simulate sync. This will help to simulate power failures and hardware crashes as the data present in the buffers are lost but not the disk. \\
+The File representation is very simple. Just a map between block number and the data present at that location.\\
+\begin{code}[name=Backend]
+-- Backend.hs
+data TestDisk a = TestDisk {
+    disk :: M.Map FilePath (File a)
+    , buffers :: M.Map FilePath (File a) 
+    , bufferSize :: Int -- Current buffer Size 
+    , openFiles :: M.Map FilePath Mode
+    } deriving (Eq,Show)
+data File a = File {
+    blocks :: M.Map Int a 
+    , size :: Int 
+    } deriving (Eq, Show)
+
+data Mode = ReadWrite | Read | Write deriving (Eq,Show) 
+\end{code}
+This was a very basic structue of file system which we will be using to write testcases using quick check . Another major thing left to abstract is concurrency and IORefs. This will be our next focus of work in the future. Another area of focus will be into optimizing the implementation and comparing its performance with sqlite. This will greatly improve our understanding whether haskell is suitable for writing industrial strength databases. 
 
 
 \bibliographystyle{IEEEbib}
