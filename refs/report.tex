@@ -8,13 +8,14 @@
 \usepackage{hyperref}
 \pagestyle{fancy}
 \definecolor{gray_ulisses}{gray}{0.55}
+\definecolor{lightgray}{gray}{0.95}
 \definecolor{castanho_ulisses}{rgb}{0.71,0.33,0.14}
 \definecolor{preto_ulisses}{rgb}{0.41,0.20,0.04}
 \definecolor{green_ulises}{rgb}{0.2,0.75,0}
 \lstdefinelanguage{HaskellU}
 {
 	basicstyle=\ttfamily\scriptsize,
-	%backgroundcolor=\color{yellow},
+	backgroundcolor=\color{lightgray},
 	%frameshape={RYRYNYYYY}{yny}{yny}{RYRYNYYYY}, %contornos... muito nice...
 	sensitive=true,
 	morecomment=[l][\color{gray_ulisses}\scriptsize]{--},
@@ -138,10 +139,12 @@ deposit a x = do
 \end{code}
 Lets see how this is translated to explicit notation without do
 notation. \\
-\begin{code}
- ReadBlock a (\amount -> return amount >>= 
+\begin{code}[stepnumber=2]
+ ReadBlock a return >>= (\amount -> WriteBlock a 
+   (amount +x) (return()))
+ ReadBlock a (\i -> return i >>= 
    \amount -> WriteBlock a (amount + x) (return()))
- ReadBlock a (\amount -> Done amount  >>= 
+ ReadBlock a (\i -> Done i  >>= 
    \amount -> WriteBlock a (amount + x) (return()))
  ReadBlock a (\amount -> 
    WriteBlock a (amount + x) (return()))
@@ -158,6 +161,12 @@ readBlockT = flip ReadBlock return
 -- | writeBlockT to be used inside the FT Monad 
 writeBlockT :: BlockNumber -> BS.ByteString -> FT ()
 writeBlockT v x =  WriteBlock v x $ return () 
+\end{code}
+Now the above deposit function can easily be written as :\\
+\begin{code}
+deposit a x = do 
+      amount <- readBlockT a 
+      writeBlockT a (amount + x)
 \end{code}
 Now we want to actually perform the transactions satisfying all the ACID
 guarantees. So we need to write a fucntion to actually convert our
@@ -206,7 +215,7 @@ runTransaction actually has to take care of lots of things.
 \begin{itemize}
 \item Gets the file Version at which the transaction started.
 \item Performs the transactions on the Journal File 
-\item Then tries to commit the transaction.Checks the present version against the version at which it started. Here comes the idea of space efficient Bloom filters which are actually used to check whether the current transaction should commit successfully or not. 
+\item Then tries to commit the transaction.Checks the present version against the version at which it started. Here comes the idea of space efficient Bloom filters which are actually used to check whether the current transaction should commit successfully or not. This operation is in a critical section as it might leave the file in inconsistent state if it is not isolated. 
 \item return the output if transaction succeeds otherwise adds the failed transactions to the faailed queue. If retryTransaction was used then it again tries to perform the transaction. 
 \end{itemize}
 All the journals of the transactions get aggregated over time which might result in poor read performances over time. So we need to actually checkpoint the commited journals back to the database file. \\
@@ -228,8 +237,8 @@ class (Show a,Monad m) => Backend b m a | b -> m where
     type BlockNumber :: *  
     open :: FilePath -> Mode -> m (Handle b)
     close :: Handle b -> m () 
-    readBlock :: (Eq BlockNumber) => Handle b -> BlockNumber -> m a 
-    writeBlock :: (Eq BlockNumber) => Handle b -> BlockNumber -> a -> m ()
+    readBlock ::(Eq BlockNumber) =>Handle b -> BlockNumber -> m a 
+    writeBlock ::(Eq BlockNumber) =>Handle b -> BlockNumber -> a -> m ()
     sync :: Handle b -> m ()
 \end{code}
 We have added the basic functions which we need in the transaction implementation. This greatly condense the side effects possible to only these functions.
@@ -262,7 +271,7 @@ instance Show a => Backend (TestDisk a)  (State (TestDisk a)) a where
 Such an implementation allows us to test lots of the properties which are otherwise difficult to test. It also helps in explicitly specifying what kind of expectation and assumptions you make on your backend. \\
 The very simple representation of the disk simulated as a map between FilePath and File. 
 We also have buffers to simulate sync. This will help to simulate power failures and hardware crashes as the data present in the buffers are lost but not the disk. \\
-The File representation is very simple. Just a map between block number and the data present at that location.
+The File representation is very simple. Just a map between block number and the data present at that location.\\
 \begin{code}[name=Backend]
 -- Backend.hs
 data TestDisk a = TestDisk {
