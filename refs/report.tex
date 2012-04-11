@@ -70,6 +70,7 @@ In this project, we present a lock free composable file transaction system imple
 \emph{Keywords:} Concurrency, Transactions, Databases, Haskell
 
 \end{abstract}
+
 %
 \section{Introduction}
 
@@ -90,6 +91,50 @@ Transactions provide an "all-or-nothing" proposition, stating that each work-uni
 \item \emph{Isolation} means that the transaction appears to execute completely alone, even if, in fact, other transactions are running simultaneously. In other words, transaction always sees a consistent snapshot of the database and is totally unaware of the changes made by other transactions which are running concurrently with it. 
 \item \emph{Durability} means that a successful transaction's changes are permanent and persist in all possible sorts of failures. In practice this means to be written on disk. 
 \end{itemize}
+
+\section{Lock Based Implementations}
+Most of the existing implementations use locks on files for concurrency control. A simplified model of database file locking  is given below.
+
+From the point of view of a single process, a database file can be in one of five locking states:
+\begin{itemize}
+\item \emph{Unlocked:} No locks are held on the database. The database may be neither read nor written. Any internally cached data is considered suspect and subject to verification against the database file before being used. Other processes can read or write the database as their own locking states permit. This is the default state.
+\item \emph{Shared:} The database may be read but not written. Any number of processes can hold shared locks at the same time, hence there can be many simultaneous readers. But no other thread or process is allowed to write to the database file while one or more shared locks are active.
+\item \emph{Reserved:}  A reserved lock means that the process is planning on writing to the database file at some point in the future but that it is currently just reading from the file. Only a single reserved lock may be active at one time, though multiple shared locks can coexist with a single reserved lock. Reserved differs from pending in that new shared locks can be acquired while there is a reserved lock.
+\item \emph{Pending:}  A pending lock means that the process holding the lock wants to write to the database as soon as possible and is just waiting on all current shared locks to clear so that it can get an exclusive lock. No new shared locks are permitted against the database if a pending lock is active, though existing shared locks are allowed to continue.
+\item \emph{Exclusive:} An exclusive lock is needed in order to write to the database file. Only one exclusive lock is allowed on the file and no other locks of any kind are allowed to coexist with an exclusive lock.
+\end{itemize}
+
+An example of database engine which follows such model is SQlite.
+Multiple readers can read from the database file. 
+Only a single writer can write to the database at any given time and all the reader have to wait till the write is complete.
+Hence such a model is good for heavy read-based applications but inefficient when multiple write transactions try to modify the database concurrently.
+
+\pagebreak
+
+\section{Algorithm}
+
+Any transaction has access to three operations :
+\begin{itemize}
+\item readblock
+\item writeblock 
+\item checkpoint
+\end{itemize}
+
+
+When a write operation is performed , the change is stored in a separate journal file per transaction.When a read operation is performed , it reads from the latest file which contains the block data.
+
+Committing a transaction increments the file version of the transaction file and marks its own journal file as valid.
+
+The set of all valid journal files and the main transaction file together represent the current state of the database at any given point of time.
+
+Transaction would fail/abort when the readblocks of the current transaction conflict with the blocks changed between the start of the current transaction and current version.
+
+Write operations always go through without any waiting period and hence they are optimal.
+The time complexity of read operation is proportional to the number of journal files on disk.
+
+Checkpointing transfers all the data in journal files to the main database file. Hence , frequent checkpointing would improve the overhead of read operations.
+
+There is a tradeoff between average read performance and average write performance. To maximize the read performance, one wants to keep the number of journal files as small as possible and hence run checkpoints frequently. To maximize write performance, one wants to amortize the cost of each checkpoint over as many writes as possible, meaning that one wants to run checkpoints infrequently and let the no of journal files grow as large as possible before each checkpoint. The decision of how often to run checkpoints may therefore vary from one application to another depending on the relative read and write performance requirements of the application.
 
 \pagebreak
 \section{Implementation Details}
