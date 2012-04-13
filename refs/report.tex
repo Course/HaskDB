@@ -134,7 +134,14 @@ Hence such a model is good for heavy read-based applications but inefficient whe
 
 1. Simplified version
 
-Assumptions :
+\subsection{Hardware Assumptions} FT does not assume that sector writes are atomic . Even though newer disk storage systems guarantee sector writes as atomic using miniature battery based power supply just after a power failure , FT follows a pessimistic approach and assumes that no such facility might be provided by the underlying hardware.
+
+FT assumes that the operating system will buffer writes and that a write request will return before data has actually been stored onto the disk. FT assumes that the flush or fsync will not return until all pending write operations for the file that is being flushed have completed. This assumption might not hold in actual practice. It is possible that the flush and fsync system calls are broken on windows and linux. This is unfortunate as it might lead to data inconsistency during a power failure. However, there is nothing that FT can do to test for or remedy the above situation. The possibility of such scenarios can be reduced by guaranteeing good uptime quality of the hardware.
+
+FT assumes that the detection and/or correction of bit errors caused by cosmic rays, thermal noise, quantum fluctuations, device driver bugs, or other mechanisms, is the responsibility of the underlying hardware and operating system. FT does not add any redundancy to the database file for the purpose of detecting corruption or I/O errors. FT assumes that the data it reads is exactly the same data that it previously wrote.
+
+By default, FT assumes that an operating system call to write a range of bytes will not damage or alter any bytes outside of that range even if a power lose or OS crash occurs during that write. 
+
 
 
 3. read/write block 
