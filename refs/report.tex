@@ -74,7 +74,14 @@ In this project, we present a lock free composable file transaction system imple
 %
 \section{Introduction}
 
-The major problem in a concurrent system with shared resource is how to share the same resource between all the processes. The most trivial way to share a resource is to acquire a lock whenever you want to use a resource and release the locks afterwards, but such kind of sharing is not very good from the perspective of concurrency. A transaction is an optimistic way of achieving the same thing without hurting the concurrent part as it allows  all the operations to run concurrently while providing mechanisms to roll-back the resource to a consistent state in case of any failure.
+The major problem in a concurrent system with shared resource is how to share the same resource between all the processes. The traditional way of keeping data consistent is with locks, and we notify threads of changes using condition variables. The example of such mechanism is Haskell's MVar. The drawbacks of using such mechanism is :
+\begin{itemize}
+\item Race conditions due to forgotten locks
+\item Deadlocks resulting from inconsistent lock ordering 
+\item Uncaught exceptions resulting in corruption 
+\end{itemize}
+
+A transaction is an optimistic way of achieving the same thing without hurting the concurrent part as it allows  all the operations to run concurrently while providing mechanisms to roll-back the resource to a consistent state in case of any failure.
 
 Formally, a transaction is a group of operations combined into a logical unit of work. Developer uses transactions to control and maintain the consistency and integrity of each action in a transaction, despite errors that might occur in the system either due to concurrency or hardware failure. In database context a transaction on a database is considered to be set of operations performed such that database is in a consistent state before and after the transaction and in case of failure the system must provide ways to roll-back partial transactions to bring the database back into a consistent state. Transaction in the database environment mainly serve two purposes:
 
@@ -91,6 +98,18 @@ Transactions provide an "all-or-nothing" proposition, stating that each work-uni
 \item \emph{Isolation} means that the transaction appears to execute completely alone, even if, in fact, other transactions are running simultaneously. In other words, transaction always sees a consistent snapshot of the database and is totally unaware of the changes made by other transactions which are running concurrently with it. 
 \item \emph{Durability} means that a successful transaction's changes are permanent and persist in all possible sorts of failures. In practice this means to be written on disk. 
 \end{itemize}
+
+Software Transactional Memory (STM) is a new way of programming in a shared memory parallel processors. STM gives us a few simple, but powerful, tools with which we can address most of these problems. We execute a block of actions as a transaction using the atomically combinator. Once we enter the block, other threads cannot see any modifications we make until we exit, nor can our thread see any changes made by other threads. These two properties mean that our execution is isolated.Upon exit from a transaction, exactly one of the following things will occur.
+\begin{itemize}
+\item If no other thread concurrently modified the same data as us, all of our modifications will simultaneously become visible to other threads.
+\item Otherwise, our modifications are discarded without being performed.
+\end{itemize}
+
+Concurrency in GHC (Glasgow Haskell Compiler) is "lightweight", which means that both thread creation and context switching overheads are extremely low. We can create thousands of threads simultaneously without any problem. Scheduling of Haskell threads is done internally in the Haskell runtime system, and doesn't make use of any operating system-supplied thread packages.
+
+In this library we have tried to imitate and provide similar high-level interface to our transactions library as is provided in case of STM. We will see the example of our interface later.
+
+
 
 \section{Lock Based Implementations}
 Most of the existing implementations use locks on files for concurrency control. A simplified model of database file locking  is given below.
@@ -136,10 +155,13 @@ Checkpointing transfers all the data in journal files to the main database file.
 
 There is a tradeoff between average read performance and average write performance. To maximize the read performance, one wants to keep the number of journal files as small as possible and hence run checkpoints frequently. To maximize write performance, one wants to amortize the cost of each checkpoint over as many writes as possible, meaning that one wants to run checkpoints infrequently and let the no of journal files grow as large as possible before each checkpoint. The decision of how often to run checkpoints may therefore vary from one application to another depending on the relative read and write performance requirements of the application.
 
+
+
 \pagebreak
 \section{Implementation Details}
 
-Here we will explain some important parts of our implementations.
+Here we will explain some important parts of our implementations which are directly taken from the lhs files. The explanation is in the blog style of writing.
+
 Lets try to capture the transaction into a data-type first. Here
 we are implementing a very basic version of transactions. So our
 transaction system only provide two type of operations to be performed
