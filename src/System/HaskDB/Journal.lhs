@@ -170,3 +170,5 @@ as well as the journal file.
 >     case r1 of 
 >         Just v -> BS.putStrLn v
 >         _ -> return ()
+
+

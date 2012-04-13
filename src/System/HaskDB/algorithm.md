@@ -1,3 +1,5 @@
+# Algorithm
+
 Any transaction has access to three operations :
 
 * readblock
@@ -18,4 +20,6 @@ The time complexity of read operation is proportional to the number of journal f
 checkpointing transfers all the data in journal files to the main database file. Hence , frequent checkpointing would improve the overhead of read operations.
 
 There is a tradeoff between average read performance and average write performance. To maximize the read performance, one wants to keep the number of journal files as small as possible and hence run checkpoints frequently. To maximize write performance, one wants to amortize the cost of each checkpoint over as many writes as possible, meaning that one wants to run checkpoints infrequently and let the no of journal files grow as large as possible before each checkpoint. The decision of how often to run checkpoints may therefore vary from one application to another depending on the relative read and write performance requirements of the application.
+
+
 

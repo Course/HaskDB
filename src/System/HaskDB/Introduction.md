@@ -11,3 +11,5 @@ Transactions provide an "all-or-nothing" proposition, stating that each work-uni
 * **Consistency** just means that a transaction is written correctly, so that when it completes successfully, the database is in a consistent state.
 * **Isolation** means that the transaction appears to execute completely alone, even if, in fact, other transactions are running simultaneously. In other words, transaction always sees a consistent snapshot of the database and is totally unaware of the changes made by other transactions which are running concurrently with it. 
 * **Durability** means that a successful transaction's changes are permanent and persist in all possible sorts of failures. In practice this means to be written on disk. 
+
+
