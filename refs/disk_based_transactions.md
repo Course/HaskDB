@@ -245,8 +245,8 @@ transfer to from amount = atomically (do
 -- | Transaction Datatype
 data FT a =
     Done a |
-    ReadBlock BlockNumber ( BS . ByteString -> FT a ) |
-    WriteBlock BlockNumber BS . ByteString ( FT a )
+    ReadBlock BlockNumber ( ByteString -> FT a ) |
+    WriteBlock BlockNumber ByteString ( FT a )
 ~~~
 
 * Allow 2 operations. 
