@@ -6,6 +6,32 @@
 # Shared Resource Problem 
 
 * **Problem** : Share a resource between multiple concurrent threads.
+* Results in several problems.
+* Lost update 
+<pre style="border:none;font-size:60%;background-color:#fff">
++----------P1-------------+-----+------------P2------------+
+|                         +  1  + w <- read(A)             |
+| u <- read(A)            +  2  +                          |
+| write(A,u+100)          +  3  +                          |
+|                         +  4  + write(A,w+100)           |
++-------------------------+-----+--------------------------+
+</pre>
+* Incorrect summary problem 
+<pre style="border:none;font-size:60%;background-color:#fff">
++----------P1-------------+-----+------------P2------------+
+|                         +  1  + w <- read(A)             |
+|                         +  2  + write(A,w-100)           |
+| u1 <- read(A)           +  3  +                          |
+| u2 <- read(B)           +  4  +                          |
+| sum = a + b             +  5  +                          |
+|                         +  6  + x <- read(B)             |
+|                         +  7  + write(B,x+100)           |
++-------------------------+-----+--------------------------+
+</pre>
+* Many more problems like the above.
+
+# Shared Resource Problem (Cont)
+
 * **Solution** : Locks !!
 * Problems with Locks
     * Race Conditions if locks are forgotten. 
@@ -13,11 +39,6 @@
     * Uncaught exceptions might result in any of the above problems. 
     * Coarse Locks hurt performance.
     * Locks don't compose.
-o
-# Shared Resource Problem (Cont)
-
-* Include here problem of interleaving with diagram 
-
 
 # Shared Resource Problem (Cont)
 
@@ -25,10 +46,24 @@ o
     * Any transaction first must acquire locks for all the shared resources.
     * Perform the operations on the shared resources.
     * Release all the locks.
-* Still deadlock problem. (DEADLOCK DIAGRAM HERE)
-    * Acquiring locks in order. 
-* Performance
-* Transactions 
+* Still deadlock problem. 
+<pre style="border:none;font-size:60%;background-color:#fff">
++----------P1-------------+-----+------------P2------------+
+|                         +  1  + Acquire(A)               |
+| Acquire(B)              +  2  +                          |
+|                         +  3  + Acquire(B)               |
+| Acquire(A)              +  4  +                          |
+| Some operations         +  5  +                          |
+| Release(B)              +  6  +                          |
+| Release(A)              +  7  +                          |
+|                         +  8  + Some operations          |
+|                         +  9  + Release(A)               |
+|                         +  10 + Release(B)               |
++-------------------------+-----+--------------------------+
+</pre>
+
+* Can prevent deadlocks by acquiring locks in certain fixed order.
+* Still hurts performance
 
 
 # Transactions 
