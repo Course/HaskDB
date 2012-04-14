@@ -71,7 +71,20 @@
 * An optimistic way of managing shared resources.
 * A set of operations which are performed on a resource either fully or none at all. 
 * Helps to maintain a consistent view of the resource. 
-(TRANSACTION DIAGRAM HERE)
+<pre style="border:none;font-size:60%;background-color:#fff">
++----------T1-------------+-----+------------T2------------+
+|                         +  1  + w <- read(A)             |
+|                         +  2  + write(A,w-100)           |
+| u1 <- read(A)           +  3  +                          |
+| write(A+100)            +  4  +                          |
+| commit                  +  5  +                          |
+|                         +  6  + x <- read(B)             |
+|                         +  7  + write(B,x+100)           |
+|                         +  8  + commit Fails             |
+|                         +  9  + rollback                 |
++-------------------------+-----+--------------------------+
+</pre>
+* When T2 is rolled back , memory state is same as if T2 has never executed.
 
 # Transactions (Cont)
 
@@ -223,11 +236,104 @@ transfer to from amount = atomically (do
 
 # Disk Based Transactions (Atleast 3-4 pages)
 
-# Implementations (Atleast  4 pages)
+# Implementation Details
 
-# Implementations (Atleast  4 pages)
+* We have captured transaction in a monad. 
 
-# Implementations (Atleast  4 pages)
+~~~ {.haskell}
+-- Transactions . lhs
+-- | Transaction Datatype
+data FT a =
+    Done a |
+    ReadBlock BlockNumber ( BS . ByteString -> FT a ) |
+    WriteBlock BlockNumber BS . ByteString ( FT a )
+~~~
 
-# Implementations (Atleast  4 pages)
+* Allow 2 operations. 
+    * Read data from a block.
+    * Write data to a block.
+
+* Monad Instance 
+
+~~~ {.haskell}
+-- Transactions . lhs
+-- | Monad Definition for the Transaction .
+instance Monad FT where
+    return = Done
+    m >>= f = case m of
+        Done a -> f a
+        ReadBlock bn c -> ReadBlock bn (\ i -> c i >>= f )
+        WriteBlock bn x c -> WriteBlock bn x ( c >>= f )
+~~~
+
+
+# Implementation Details (Cont)
+
+* Example Usage:
+
+~~~ {.haskell}
+deposit :: BlockNumber -> ByteString -> FT ()
+deposit a x = do 
+      amount <- ReadBlock a return 
+      WriteBlock a (amount + x) (return ())
+~~~
+
+* Explicit notation in terms of bind and return
+
+~~~ {.haskell}
+ ReadBlock a return >>= (\amount -> WriteBlock a (amount +x) (return()))
+ ReadBlock a (\i -> return i >>= \amount -> WriteBlock a (amount + x) (return()))
+ ReadBlock a (\i -> Done i  >>= \amount -> WriteBlock a (amount + x) (return()))
+ ReadBlock a (\i -> WriteBlock a (i + x) (return()))
+~~~
+
+# Implementation Details (Cont)
+
+* Defining monad instance has 2 advantages
+    * Type Checker prevents the user from performing any other IO operations. 
+    
+    ~~~ {.haskell}
+    deposit :: BlockNumber -> ByteString -> FT ()
+    deposit a x = do 
+        amount <- ReadBlock a return 
+        print amount -- Not allowed by type checker 
+        WriteBlock a (amount + x) (return ())
+    ~~~
+    
+    * Easy composition 
+
+    ~~~ {.haskell}
+    transfer :: BlockNumber -> BlockNumber -> ByteString -> FT ()
+    transfer a b x = deposit a (-x) >> deposit b x
+    ~~~
+
+    ~~~ {.haskell}
+    transfer :: BlockNumber -> BlockNumber -> ByteString -> FT ()
+    transfer a b x = do 
+        deposit a (-x)
+        deposit b x
+    ~~~
+
+# Implementation Details (Cont)
+
+* Running a transaction 
+
+~~~ {.haskell}
+runTransaction :: FT a -> TFile -> IO a
+runTransaction (transfer a b 100)
+retryTransaction :: FT a -> TFile -> IO a
+retryTransaction (transfer a b 100)
+~~~
+
+* runTransaction ensures all the properties of a transaction. 
+* Transaction may fail while using runTransaction. 
+* retryTransaction ensures that transaction is repeated until it succeeds.
+* Too many Journals might result in poor read performance.
+* Sequencer copies the data to the main file and remove the intermediate journal files. 
+
+~~~ {.haskell}
+sequencer :: TFile -> IO () 
+~~~
+
+
 
