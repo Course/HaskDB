@@ -86,7 +86,29 @@
 
 # Transactions in Databases (Atleast 5 slides)
 
+* serializabilty
+
+* In a serial schedule, each transaction is performed in its entirety in serial 
+  order. There is no interleaving.
+
+* DEFINITION: A schedule S is said to be serial if, for every transaction T 
+participating in the schedule, all the operations of T are executed 
+consecutively in the schedule; otherwise, the schedule is called nonserial.
+
 # Transactions in Databases (Atleast 5 slides)
+
+* Why we like Interleafing
+
+* In a serial schedule, if a transaction waits for an I/O operation to complete, 
+idle CPU time is generated and wasted for lack of use.
+
+* Other transactions may also be in line waiting for the completion of a 
+transaction.
+
+* For these reasons, serial schedules are generally considered unacceptable in 
+practice.
+
+* Interleaving could improve the use of the CPU cycles.
 
 # Transactions in Databases (Atleast 5 slides)
 
