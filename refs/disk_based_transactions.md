@@ -97,37 +97,103 @@
 * **Durability**
     * Once a transaction commits , changes should persist. 
 
-# Transactions in Databases (Atleast 5 slides)
+# Some Database Jargon 
 
-* serializabilty
-
+* Schedule
+* Serial Schedule
+* Serializabilty
 * In a serial schedule, each transaction is performed in its entirety in serial 
   order. There is no interleaving.
 
-* DEFINITION: A schedule S is said to be serial if, for every transaction T 
-participating in the schedule, all the operations of T are executed 
-consecutively in the schedule; otherwise, the schedule is called nonserial.
+# Schedule 
 
-# Transactions in Databases (Atleast 5 slides)
+* A sequence of instructions that specify the chronological
+order in which instructions of concurrent transactions are executed
+    * A schedule for a set of transactions must consist of all instructions
+      of those transactions
+    * A schedule must preserve the order in which the instructions appear in each
+      individual transaction.
 
-* Why we like Interleafing
+# Serial Schedule 
+
+* A serial schedule in which T1 is followed by T2
+
+<pre style="border:none;font-size:60%;background-color:#fff">
++----------T1-------------+-----+------------T2------------+
+| read(A)                 +  1  +                          |
+| A <- A * 2              +  2  +                          |
+| write(A)                +  3  +                          |
+|                         +  4  + read(A)                  |
+|                         +  5  + A <- A - 50              |
+|                         +  6  + write(A)                 |
+|                         +  7  + read(B)                  |
+|                         +  8  + B <- B + 50              |
+|                         +  9  + write(B)                 |
++-------------------------+-----+--------------------------+
+</pre>
+
+
+* A serial schedule in which T2 is followed by T1
+
+<pre style="border:none;font-size:60%;background-color:#fff">
++----------T1-------------+-----+------------T2------------+
+|                         +  1  + read(A)                  |
+|                         +  2  + A <- A - 50              |
+|                         +  3  + write(A)                 |
+|                         +  4  + read(B)                  |
+|                         +  5  + B <- B + 50              |
+|                         +  6  + write(B)                 |
+| read(A)                 +  7  +                          |
+| A <- A * 2              +  8  +                          |
+| write(A)                +  9  +                          |
++-------------------------+-----+--------------------------+
+</pre>
+
+
+# Conflicting Instructions
+
+* Instructions Ii and Ij of transactions Ti and Tj respectively, conflict
+if and only if there exists some item Q accessed by both Ii and Ij,
+and at least one of these instructions wrote Q.
+
+* Intuitively, a conflict between Ii and Ij forces a (logical) temporal order between them.
+    * If Ii and Ij are consecutive in a schedule and they do not conflict, their results would remain the same even if they had been interchanged in the schedule.
+
+# Serializabilty
+
+* If a schedule S can be transformed into a schedule S´ by a series of
+swaps of non-conflicting instructions, we say that S and S´ are
+equivalent
+* We say that a schedule S is serializable if it is equivalent to a serial schedule
+* Serializabilty provides us with *formalism* for valid interleaving
+
+# Why interleave 
 
 * In a serial schedule, if a transaction waits for an I/O operation to complete, 
-idle CPU time is generated and wasted for lack of use.
-
+CPU cycles are wasted ...
 * Other transactions may also be in line waiting for the completion of a 
-transaction.
-
+transaction. (Hint: Convoy effect)
 * For these reasons, serial schedules are generally considered unacceptable in 
 practice.
+* Interleaving could 
+    * utilise idle CPU cycles
+    * improve "perceived performance"
 
-* Interleaving could improve the use of the CPU cycles.
+# A Simplified View of Transactions
 
-# Transactions in Databases (Atleast 5 slides)
+* We ignore operations other than read and write instructions
+* We assume that transactions may perform arbitrary computations on data in local buffers in between reads
+  and writes
+* Our simplified schedules consist of only read and write instructions
 
-# Transactions in Databases (Atleast 5 slides)
+# Lock Based Implementations 
 
-# Transactions in Databases (Atleast 5 slides)
+* Global lock on the database file
+* Multiple readers can *share* locks in the absence of writer
+* Writer requires *exclusive* locks
+* Good for read heavy applications
+* Inefficient in case of multiple writers
+
 
 # Software Transactional Memory (STM)
 
@@ -248,15 +314,59 @@ transfer to from amount = atomically (do
       World
     * Since Haskell is lazy, stops computing at first `Nothing`
 
-# Disk Based Transactions (Atleast 5 pages)
+# Disk Based Transactions 
 
-# Disk Based Transactions (Atleast 5 pages)
+# Assumptions
 
-# Disk Based Transactions (Atleast 5 pages)
+* fsync syscall works as advertised
+* the data it reads is *exactly* the same that it previously wrote
+* writing to disk adheres to  block boundaries
 
-# Disk Based Transactions (Atleast 5 pages)
+# Algorithm
 
-# Disk Based Transactions (Atleast 3-4 pages)
+* A single transaction file on which all transactions are done
+* each read-write transaction has its own *log*
+* read-only transactions don't need any *logs*
+* a transaction first writes to its own *log*
+* Committing a transaction increments the file version of the transaction file
+* Reads from the latest valid *log*
+
+# Algorithm (contd)
+
+* Queue of *commited logs*
+* Bloom filters 
+
+# Commit workflow
+
+# Sequencer
+
+* number of *logs* can grow very fast
+* checkpoint performs the following operations 
+    * merges all the data from *logs* onto the transaction file
+    * removes the *log* reference from the queue
+    * deletes the corresponding *log* file from disk
+* sequencer can be called by the programmer at suitable time
+
+# ACIDity
+* **Atomicity** 
+    * Transaction either commits or fails 
+* **Consistency**
+    * The set of *valid logs* + transaction file is always consistent
+* **Isolation** 
+    * 
+* **Durability**
+    * Once a transaction commits , fsync must ensure that the data is actually written onto the disk.
+
+
+
+# Performance Trade-off
+
+* There is a trade-off between average read performance and average write performance 
+* Keep minimum number of *logs* for maximum read performance
+    * checkpoint as frequently as possible
+* For maximum write performance , delay checkpoints as far as possible
+* The optimum checkpoint frequency depends on the particular performance requirements of the application
+
 
 # Implementation Details
 
