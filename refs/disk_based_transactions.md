@@ -194,37 +194,11 @@ transfer :: Account -> Account -> Int -> IO ()
 transfer to from amount = atomically (do 
     withdraw from amount 
     deposit to amount)
-
 ~~~
 
 * No deadlocks 
 * Easy to compose 
 * Type system prevents any IO operations to be performed inside a transaction.
-
-
-
-        return = Just
-        fail _ = Nothing
-    ~~~~
-
-* You can use `Nothing` to indicate failure
-    * Might have a bunch of functions to extract fields from data
-
-    ~~~~ {.haskell}
-    extractA :: String -> Maybe Int
-    extractB :: String -> Maybe String
-    ...
-    parseForm :: String -> Maybe Form
-    parseForm raw = do
-        a <- extractA raw
-        b <- extractB raw
-        ...
-        return (Form a b ...)
-    ~~~~
-
-    * Threads success/failure state through system as `IO` threaded
-      World
-    * Since Haskell is lazy, stops computing at first `Nothing`
 
 # Disk Based Transactions (Atleast 5 pages)
 
@@ -334,6 +308,109 @@ retryTransaction (transfer a b 100)
 ~~~ {.haskell}
 sequencer :: TFile -> IO () 
 ~~~
+
+# Testing 
+
+* Ensuring robustness and quality of the implementation.
+* QuickCheck : Tool for type based testing.
+* Invariants checked on random testcases generated from the function type. 
+
+~~~ {.haskell}
+qsort :: Ord a => [a] -> [a]
+qsort (x:xs) = qsort lhs ++ [x] ++ qsort rhs
+    where lhs = filter  (< x) xs
+          rhs = filter (>= x) xs
+-- Quickcheck property to check 
+prop_sortcheck xs = qsort (qsort xs) == qsort xs
+~~~ 
+
+~~~ {.haskell}
+ghci> quickCheck (prop_sortcheck :: [Integer] -> Bool)
+*** Failed! Exception: 'qsort.hs:(3,1)-(5,32): Non-exhaustive patterns in function qsort' (after 1 test): 
+[]
+~~~ 
+
+* Correcting the code 
+
+~~~ {.haskell}
+qsort [] = []
+~~~ 
+
+~~~ {.haskell}
+ghci> quickCheck (prop_sortcheck :: [Integer] -> Bool)
++++ OK, passed 100 tests.
+~~~
+
+# Testing (Cont)
+
+* Keeping things pure. 
+* Easier to reason about code with no side effects.
+* Simulate File system without actually performing IO for testing purposes.
+* Different types for actual code and testing code. 
+* Type Classes.
+
+~~~ {.haskell}
+-- Backend.hs
+class (Show a,Monad m) => Backend b m a | b -> m where 
+    data Handle :: * -> * 
+    type BlockNumber :: *  
+    open :: FilePath -> Mode -> m (Handle b)
+    close :: Handle b -> m () 
+    readBlock ::(Eq BlockNumber)=>Handle b->BlockNumber->m a 
+    writeBlock ::(Eq BlockNumber)=>Handle b->BlockNumber->a->m ()
+    sync :: Handle b -> m ()
+~~~ 
+
+# Testing (Cont)
+
+* File System being simulated in memory.
+
+~~~ {.haskell}
+-- Backend.hs
+data TestDisk a = TestDisk {
+    disk :: M.Map FilePath (File a)
+   , buffers :: M.Map FilePath (File a) 
+   , bufferSize :: Int -- Current buffer Size 
+   , openFiles :: M.Map FilePath Mode
+    } deriving (Eq,Show)
+data File a = File {
+    blocks :: M.Map Int a 
+   , size :: Int 
+    } deriving (Eq, Show)
+
+data Mode = ReadWrite | Read | Write deriving (Eq,Show) 
+~~~ 
+
+
+# Testing (Cont)
+
+* Instance of the Backend Class . Pure and no side effects. 
+
+~~~ {.haskell}
+instance Show a => Backend (TestDisk a)  (State (TestDisk a)) a where 
+    data Handle (TestDisk a) = Handle FilePath 
+    type BlockNumber = Int 
+    open fp m = do 
+        disk <- get
+        put $ openFile disk fp m 
+        return $ Handle fp
+    close (Handle fp) = do 
+        disk <- get 
+        put $ closeFile disk fp
+    readBlock (Handle fp) bn = do 
+        t <- get 
+        case readB t fp bn buffers of 
+            Nothing -> error "Block Not Found"
+            Just a -> return a
+    writeBlock (Handle fp) bn a = do 
+        t <- get 
+        put $ writeB t fp bn a 
+    sync (Handle fp) = do  
+        t <- get 
+        put $ flushBuffer t fp
+~~~
+
+
 
 
 
