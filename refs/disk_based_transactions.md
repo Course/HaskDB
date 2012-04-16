@@ -2,9 +2,14 @@
 % Satvik Chauhan and Pankaj More 
 % April 16 , 2012
 
-
 # Shared Resource Problem 
 
+<script type="text/javascript"> 
+window.onload = function ()
+{
+var x = document.getElementsByTagName('ul');for(var i = x.length;i--;){var li=x[i];li.className += 'incremental';};
+}
+</script>
 * **Problem** : Share a resource between multiple concurrent threads.
 * Results in several problems.
 * Lost update 
