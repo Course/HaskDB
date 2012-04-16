@@ -33,7 +33,7 @@
 # Shared Resource Problem (Cont)
 
 * **Solution** : Locks !!
-* Problems with Locks
+* Problem with Locks
     * Race Conditions if locks are forgotten. 
     * Deadlocks from inconsistent locks ordering. 
     * Uncaught exceptions might result in any of the above problems. 
@@ -74,10 +74,10 @@
 <pre style="border:none;font-size:60%;background-color:#fff">
 +----------T1-------------+-----+------------T2------------+
 |                         +  1  + w <- read(A)             |
-|                         +  2  + write(A,w-100)           |
-| u1 <- read(A)           +  3  +                          |
-| write(A+100)            +  4  +                          |
-| commit                  +  5  +                          |
+| u1 <- read(A)           +  2  +                          |
+| write(A+100)            +  3  +                          |
+| commit                  +  4  +                          |
+|                         +  5  + write(A,w-100)           |
 |                         +  6  + x <- read(B)             |
 |                         +  7  + write(B,x+100)           |
 |                         +  8  + commit Fails             |
@@ -287,30 +287,6 @@ transfer to from amount = atomically (do
 * No deadlocks 
 * Easy to compose 
 * Type system prevents any IO operations to be performed inside a transaction.
-
-
-        return = Just
-        fail _ = Nothing
-    ~~~~
-
-* You can use `Nothing` to indicate failure
-    * Might have a bunch of functions to extract fields from data
-
-    ~~~~ {.haskell}
-    extractA :: String -> Maybe Int
-    extractB :: String -> Maybe String
-    ...
-    parseForm :: String -> Maybe Form
-    parseForm raw = do
-        a <- extractA raw
-        b <- extractB raw
-        ...
-        return (Form a b ...)
-    ~~~~
-
-    * Threads success/failure state through system as `IO` threaded
-      World
-    * Since Haskell is lazy, stops computing at first `Nothing`
 
 # Disk Based Transactions 
 
