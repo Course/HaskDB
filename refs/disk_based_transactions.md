@@ -122,7 +122,6 @@ order in which instructions of concurrent transactions are executed
 # Serial Schedule 
 
 * A serial schedule in which T1 is followed by T2
-
 <pre style="border:none;font-size:60%;background-color:#fff">
 +----------T1-------------+-----+------------T2------------+
 | read(A)                 +  1  +                          |
@@ -136,10 +135,7 @@ order in which instructions of concurrent transactions are executed
 |                         +  9  + write(B)                 |
 +-------------------------+-----+--------------------------+
 </pre>
-
-
 * A serial schedule in which T2 is followed by T1
-
 <pre style="border:none;font-size:60%;background-color:#fff">
 +----------T1-------------+-----+------------T2------------+
 |                         +  1  + read(A)                  |
@@ -157,12 +153,11 @@ order in which instructions of concurrent transactions are executed
 
 # Conflicting Instructions
 
-* Instructions Ii and Ij of transactions Ti and Tj respectively, conflict
-if and only if there exists some item Q accessed by both Ii and Ij,
+* Instructions I<sub>i</sub> and I<sub>j</sub> of transactions T<sub>i</sub> and T<sub>j</sub> respectively, conflict
+if and only if there exists some item Q accessed by both I<sub>i</sub> and I<sub>j</sub>,
 and at least one of these instructions wrote Q.
-
-* Intuitively, a conflict between Ii and Ij forces a (logical) temporal order between them.
-    * If Ii and Ij are consecutive in a schedule and they do not conflict, their results would remain the same even if they had been interchanged in the schedule.
+* Intuitively, a conflict between I<sub>i</sub> and I<sub>j</sub> forces a (logical) temporal order between them.
+* If I<sub>i</sub> and I<sub>j</sub> are consecutive in a schedule and they do not conflict, their results would remain the same even if they had been interchanged in the schedule.
 
 # Serializabilty
 
@@ -297,16 +292,16 @@ transfer to from amount = atomically (do
 
 # Assumptions
 
-* fsync syscall works as advertised
-* the data it reads is *exactly* the same that it previously wrote
-* writing to disk adheres to  block boundaries
+* Fsync syscall works as advertised
+* The data it reads is *exactly* the same that it previously wrote
+* Writing to disk adheres to  block boundaries
 
 # Algorithm
 
 * A single transaction file on which all transactions are done
-* each read-write transaction has its own *log*
+* Each read-write transaction has its own *log*
 * read-only transactions don't need any *logs*
-* a transaction first writes to its own *log*
+* A transaction first writes to its own *log*
 * Committing a transaction increments the file version of the transaction file
 * Reads from the latest valid *log*
 
@@ -319,12 +314,12 @@ transfer to from amount = atomically (do
 
 # Sequencer
 
-* number of *logs* can grow very fast
-* checkpoint performs the following operations 
-    * merges all the data from *logs* onto the transaction file
-    * removes the *log* reference from the queue
-    * deletes the corresponding *log* file from disk
-* sequencer can be called by the programmer at suitable time
+* Number of *logs* can grow very fast
+* Checkpoint performs the following operations 
+    * Merges all the data from *logs* onto the transaction file
+    * Removes the *log* reference from the queue
+    * Deletes the corresponding *log* file from disk
+* Sequencer can be called by the programmer at suitable time
 
 # ACIDity
 * **Atomicity** 
@@ -340,7 +335,7 @@ transfer to from amount = atomically (do
 
 * There is a trade-off between average read performance and average write performance 
 * Keep minimum number of *logs* for maximum read performance
-    * checkpoint as frequently as possible
+    * Checkpoint as frequently as possible
 * For maximum write performance , delay checkpoints as far as possible
 * The optimum checkpoint frequency depends on the particular performance requirements of the application
 
