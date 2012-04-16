@@ -33,14 +33,13 @@ var x = document.getElementsByTagName('ul');for(var i = x.length;i--;){var li=x[
 |                         +  7  + write(B,x+100)           |
 +-------------------------+-----+--------------------------+
 </pre>
-* Many more problems like the above.
 
 # Shared Resource Problem (Cont)
 
 * **Solution** : Locks !!
 * Problem with Locks
     * Race Conditions if locks are forgotten. 
-    * Deadlocks from inconsistent locks ordering. 
+    * Deadlocks from inconsistent lock ordering. 
     * Uncaught exceptions might result in any of the above problems. 
     * Coarse Locks hurt performance.
     * Locks don't compose.
@@ -98,7 +97,7 @@ var x = document.getElementsByTagName('ul');for(var i = x.length;i--;){var li=x[
 * **Consistency**
     * Resource is in a consistent state after a transaction commits. 
 * **Isolation** 
-    * Unaware of the affects of concurrently running transactions. 
+    * Unaware of the effects of concurrently running transactions. 
 * **Durability**
     * Once a transaction commits , changes should persist. 
 
@@ -283,11 +282,10 @@ transfer to from amount = atomically (do
 
 # Disk Based Transactions 
 
-# Assumptions
-
-* Fsync syscall works as advertised
-* The data it reads is *exactly* the same that it previously wrote
-* Writing to disk adheres to  block boundaries
+* Assumptions
+    * Fsync syscall works as advertised
+    * The data it reads is *exactly* the same that it previously wrote
+    * Writing to disk adheres to  block boundaries
 
 # Algorithm
 
@@ -298,11 +296,6 @@ transfer to from amount = atomically (do
 * A transaction first writes to its own *log*
 * Committing a transaction increments the file version of the transaction file
 * Reads from the latest valid *log*
-
-# Algorithm (Cont)
-
-* Queue of *committed logs*
-* Bloom filters 
 
 # Commit workflow
 
@@ -331,7 +324,7 @@ transfer to from amount = atomically (do
 * **Consistency**
     * The set of *valid logs* + transaction file is always consistent
 * **Isolation** 
-    * 
+    * In case it sees the effect of another transaction , it *surely* fails 
 * **Durability**
     * Once a transaction commits , fsync must ensure that the data is actually written onto the disk.
 
