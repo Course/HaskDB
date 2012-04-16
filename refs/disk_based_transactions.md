@@ -33,14 +33,13 @@ var x = document.getElementsByTagName('ul');for(var i = x.length;i--;){var li=x[
 |                         +  7  + write(B,x+100)           |
 +-------------------------+-----+--------------------------+
 </pre>
-* Many more problems like the above.
 
 # Shared Resource Problem (Cont)
 
 * **Solution** : Locks !!
 * Problem with Locks
     * Race Conditions if locks are forgotten. 
-    * Deadlocks from inconsistent locks ordering. 
+    * Deadlocks from inconsistent lock ordering. 
     * Uncaught exceptions might result in any of the above problems. 
     * Coarse Locks hurt performance.
     * Locks don't compose.
@@ -98,26 +97,19 @@ var x = document.getElementsByTagName('ul');for(var i = x.length;i--;){var li=x[
 * **Consistency**
     * Resource is in a consistent state after a transaction commits. 
 * **Isolation** 
-    * Unaware of the affects of concurrently running transactions. 
+    * Unaware of the effects of concurrently running transactions. 
 * **Durability**
     * Once a transaction commits , changes should persist. 
 
-# Some Database Jargon 
+# Disk Based Transactions
 
 * Schedule
-* Serial Schedule
-* Serializabilty
-* In a serial schedule, each transaction is performed in its entirety in serial 
-  order. There is no interleaving.
-
-# Schedule 
-
-* A sequence of instructions that specify the chronological
-order in which instructions of concurrent transactions are executed
-    * A schedule for a set of transactions must consist of all instructions
-      of those transactions
-    * A schedule must preserve the order in which the instructions appear in each
-      individual transaction.
+    * A sequence of instructions that specify the chronological
+    order in which instructions of concurrent transactions are executed
+        * A schedule for a set of transactions must consist of all instructions
+        of those transactions
+        * A schedule must preserve the order in which the instructions appear in each
+        individual transaction.
 
 # Serial Schedule 
 
@@ -157,7 +149,7 @@ order in which instructions of concurrent transactions are executed
 if and only if there exists some item Q accessed by both I<sub>i</sub> and I<sub>j</sub>,
 and at least one of these instructions wrote Q.
 * Intuitively, a conflict between I<sub>i</sub> and I<sub>j</sub> forces a (logical) temporal order between them.
-* If I<sub>i</sub> and I<sub>j</sub> are consecutive in a schedule and they do not conflict, their results would remain the same even if they had been interchanged in the schedule.
+    * If I<sub>i</sub> and I<sub>j</sub> are consecutive in a schedule and they do not conflict, their results would remain the same even if they had been interchanged in the schedule.
 
 # Serializabilty
 
@@ -290,27 +282,32 @@ practice.
 
 # Disk Based Transactions 
 
-# Assumptions
-
-* Fsync syscall works as advertised
-* The data it reads is *exactly* the same that it previously wrote
-* Writing to disk adheres to  block boundaries
+* Assumptions
+    * Fsync syscall works as advertised
+    * The data it reads is *exactly* the same that it previously wrote
+    * Writing to disk adheres to  block boundaries
 
 # Algorithm
 
-* A single transaction file on which all transactions are done
+* A single transaction file on which all transactions are done 
+* A transaction can be either ReadOnly or ReadWrite
 * Each read-write transaction has its own *log*
 * read-only transactions don't need any *logs*
 * A transaction first writes to its own *log*
 * Committing a transaction increments the file version of the transaction file
 * Reads from the latest valid *log*
 
-# Algorithm (contd)
-
-* Queue of *commited logs*
-* Bloom filters 
-
 # Commit workflow
+
+![](1.png)
+
+# Commit workflow (Cont)
+
+![](2.png)
+
+# Commit workflow (Cont)
+
+![](3.png)
 
 # Sequencer
 
@@ -327,7 +324,7 @@ practice.
 * **Consistency**
     * The set of *valid logs* + transaction file is always consistent
 * **Isolation** 
-    * 
+    * In case it sees the effect of another transaction , it *surely* fails 
 * **Durability**
     * Once a transaction commits , fsync must ensure that the data is actually written onto the disk.
 
