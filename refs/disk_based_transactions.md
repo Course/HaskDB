@@ -142,6 +142,19 @@ var x = document.getElementsByTagName('ul');for(var i = x.length;i--;){var li=x[
 +-------------------------+-----+--------------------------+
 </pre>
 
+# Why interleave 
+
+* In a serial schedule, if a transaction waits for an I/O operation to complete, 
+CPU cycles are wasted 
+* Other transactions may also be in line waiting for the completion of a 
+transaction. (Hint: Convoy effect)
+* For these reasons, serial schedules are generally considered unacceptable in 
+practice.
+* Interleaving could 
+    * utilise idle CPU cycles
+    * improve "perceived performance"
+
+
 
 # Conflicting Instructions
 
@@ -158,18 +171,7 @@ swaps of non-conflicting instructions, we say that S and S´ are
 equivalent
 * We say that a schedule S is serializable if it is equivalent to a serial schedule
 * Serializabilty provides us with *formalism* for valid interleaving
-
-# Why interleave 
-
-* In a serial schedule, if a transaction waits for an I/O operation to complete, 
-CPU cycles are wasted ...
-* Other transactions may also be in line waiting for the completion of a 
-transaction. (Hint: Convoy effect)
-* For these reasons, serial schedules are generally considered unacceptable in 
-practice.
-* Interleaving could 
-    * utilise idle CPU cycles
-    * improve "perceived performance"
+* All possible equivalent schedules are candidates for valid concurrent execution
 
 # A Simplified View of Transactions
 
