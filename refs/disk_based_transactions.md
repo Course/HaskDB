@@ -102,22 +102,15 @@ var x = document.getElementsByTagName('ul');for(var i = x.length;i--;){var li=x[
 * **Durability**
     * Once a transaction commits , changes should persist. 
 
-# Some Database Jargon 
+# Disk Based Transactions
 
 * Schedule
-* Serial Schedule
-* Serializabilty
-* In a serial schedule, each transaction is performed in its entirety in serial 
-  order. There is no interleaving.
-
-# Schedule 
-
-* A sequence of instructions that specify the chronological
-order in which instructions of concurrent transactions are executed
-    * A schedule for a set of transactions must consist of all instructions
-      of those transactions
-    * A schedule must preserve the order in which the instructions appear in each
-      individual transaction.
+    * A sequence of instructions that specify the chronological
+    order in which instructions of concurrent transactions are executed
+        * A schedule for a set of transactions must consist of all instructions
+        of those transactions
+        * A schedule must preserve the order in which the instructions appear in each
+        individual transaction.
 
 # Serial Schedule 
 
@@ -157,12 +150,11 @@ order in which instructions of concurrent transactions are executed
 
 # Conflicting Instructions
 
-* Instructions Ii and Ij of transactions Ti and Tj respectively, conflict
-if and only if there exists some item Q accessed by both Ii and Ij,
+* Instructions I<sub>i</sub> and I<sub>j</sub> of transactions T<sub>i</sub> and T<sub>j</sub> respectively, conflict
+if and only if there exists some item Q accessed by both I<sub>i</sub> and I<sub>j</sub>,
 and at least one of these instructions wrote Q.
-
-* Intuitively, a conflict between Ii and Ij forces a (logical) temporal order between them.
-    * If Ii and Ij are consecutive in a schedule and they do not conflict, their results would remain the same even if they had been interchanged in the schedule.
+* Intuitively, a conflict between I<sub>i</sub> and I<sub>j</sub> forces a (logical) temporal order between them.
+    * If I<sub>i</sub> and I<sub>j</sub> are consecutive in a schedule and they do not conflict, their results would remain the same even if they had been interchanged in the schedule.
 
 # Serializabilty
 
@@ -303,19 +295,30 @@ transfer to from amount = atomically (do
 
 # Algorithm
 
-* A single transaction file on which all transactions are done
+* A single transaction file on which all transactions are done 
+* A transaction can be either ReadOnly or ReadWrite
 * each read-write transaction has its own *log*
 * read-only transactions don't need any *logs*
-* a transaction first writes to its own *log*
+* a transaction writes only to its own *log*
 * Committing a transaction increments the file version of the transaction file
 * Reads from the latest valid *log*
 
-# Algorithm (contd)
+# Algorithm (Cont)
 
-* Queue of *commited logs*
+* Queue of *committed logs*
 * Bloom filters 
 
 # Commit workflow
+
+![](1.png)
+
+# Commit workflow (Cont)
+
+![](2.png)
+
+# Commit workflow (Cont)
+
+![](3.png)
 
 # Sequencer
 
