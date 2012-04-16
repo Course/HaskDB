@@ -115,7 +115,6 @@ var x = document.getElementsByTagName('ul');for(var i = x.length;i--;){var li=x[
 # Serial Schedule 
 
 * A serial schedule in which T1 is followed by T2
-
 <pre style="border:none;font-size:60%;background-color:#fff">
 +----------T1-------------+-----+------------T2------------+
 | read(A)                 +  1  +                          |
@@ -129,10 +128,7 @@ var x = document.getElementsByTagName('ul');for(var i = x.length;i--;){var li=x[
 |                         +  9  + write(B)                 |
 +-------------------------+-----+--------------------------+
 </pre>
-
-
 * A serial schedule in which T2 is followed by T1
-
 <pre style="border:none;font-size:60%;background-color:#fff">
 +----------T1-------------+-----+------------T2------------+
 |                         +  1  + read(A)                  |
@@ -289,17 +285,17 @@ transfer to from amount = atomically (do
 
 # Assumptions
 
-* fsync syscall works as advertised
-* the data it reads is *exactly* the same that it previously wrote
-* writing to disk adheres to  block boundaries
+* Fsync syscall works as advertised
+* The data it reads is *exactly* the same that it previously wrote
+* Writing to disk adheres to  block boundaries
 
 # Algorithm
 
 * A single transaction file on which all transactions are done 
 * A transaction can be either ReadOnly or ReadWrite
-* each read-write transaction has its own *log*
+* Each read-write transaction has its own *log*
 * read-only transactions don't need any *logs*
-* a transaction writes only to its own *log*
+* A transaction first writes to its own *log*
 * Committing a transaction increments the file version of the transaction file
 * Reads from the latest valid *log*
 
@@ -322,12 +318,12 @@ transfer to from amount = atomically (do
 
 # Sequencer
 
-* number of *logs* can grow very fast
-* checkpoint performs the following operations 
-    * merges all the data from *logs* onto the transaction file
-    * removes the *log* reference from the queue
-    * deletes the corresponding *log* file from disk
-* sequencer can be called by the programmer at suitable time
+* Number of *logs* can grow very fast
+* Checkpoint performs the following operations 
+    * Merges all the data from *logs* onto the transaction file
+    * Removes the *log* reference from the queue
+    * Deletes the corresponding *log* file from disk
+* Sequencer can be called by the programmer at suitable time
 
 # ACIDity
 * **Atomicity** 
@@ -343,7 +339,7 @@ transfer to from amount = atomically (do
 
 * There is a trade-off between average read performance and average write performance 
 * Keep minimum number of *logs* for maximum read performance
-    * checkpoint as frequently as possible
+    * Checkpoint as frequently as possible
 * For maximum write performance , delay checkpoints as far as possible
 * The optimum checkpoint frequency depends on the particular performance requirements of the application
 
