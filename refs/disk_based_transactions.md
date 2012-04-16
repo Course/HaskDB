@@ -101,6 +101,17 @@ var x = document.getElementsByTagName('ul');for(var i = x.length;i--;){var li=x[
 * **Durability**
     * Once a transaction commits , changes should persist. 
 
+# Software Transactional Memory (STM)
+
+* New way of programming on multicore systems. 
+* Optimistic way of running transactions. 
+* Allows all transactions to run simultaneously.
+    * Transactions perform changes to their own local buffer. 
+    * At the time of commit, decide success or failure. 
+    * Success : The changes become simultaneously visible to other threads. 
+    * Failure : No changes made to the memory. 
+* Compose well. 
+
 # Disk Based Transactions
 
 * Schedule
@@ -187,17 +198,6 @@ practice.
 * Inefficient in case of multiple writers
 
 
-# Software Transactional Memory (STM)
-
-* New way of programming on multicore systems. 
-* Optimistic way of running transactions. 
-* Allows all transactions to run simultaneously.
-    * Transactions perform changes to their own local buffer. 
-    * At the time of commit, decide success or failure. 
-    * Success : The changes become simultaneously visible to other threads. 
-    * Failure : No changes made to the memory. 
-* Compose well. 
-
 # Why Haskell?
 
 * Haskell's expressive power can improve productivity
@@ -231,6 +231,7 @@ practice.
 
     * *order-independent* - order of bindings in source code does not
        matter
+
     * *lazy* - definitions of symbols are evaluated only when needed
 
         ~~~ {.haskell}
