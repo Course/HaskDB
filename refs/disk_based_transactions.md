@@ -230,21 +230,21 @@ practice.
 
 * Unlike variables in imperative languages, Haskell bindings are
     * *immutable* - can only bind a symbol once in a give scope<br>
-      (We still call bound symbols "variables" though)
+      (We still call bound symbols "variables" though) <br>
 
-    ~~~ {.haskell}
-    x = 5
-    x = 6                      -- error, cannot re-bind x
-    ~~~
+        ~~~ {.haskell}
+        x = 5
+        x = 6                      -- error, cannot re-bind x
+        ~~~
 
     * *order-independent* - order of bindings in source code does not
        matter
     * *lazy* - definitions of symbols are evaluated only when needed
 
-    ~~~ {.haskell}
-    evens = map (*2) [1..] -- infinite list of even numbers
-    main = print (take 50 evens) -- prints first 50 even numbers
-    ~~~
+        ~~~ {.haskell}
+        evens = map (*2) [1..] -- infinite list of even numbers
+        main = print (take 50 evens) -- prints first 50 even numbers
+        ~~~
 
     * *recursive* 
     
@@ -252,16 +252,16 @@ practice.
 
 * Transactions Using Locks 
 
-~~~ {.haskell}
-transfer :: Account -> Account -> Int -> IO ()
-transfer to from amount = do 
-    acquire fromLock
-    acquire toLock 
-    withdraw from amount 
-    deposit to amount 
-    release fromLock 
-    release toLock
-~~~
+    ~~~ {.haskell}
+    transfer :: Account -> Account -> Int -> IO ()
+    transfer to from amount = do 
+        acquire fromLock
+        acquire toLock 
+        withdraw from amount 
+        deposit to amount 
+        release fromLock 
+        release toLock
+    ~~~
 
 * Easy to result into deadlocks.
 
@@ -269,20 +269,20 @@ transfer to from amount = do
 
 * STM  
 
-~~~ {.haskell}
-withdraw :: Account -> Int -> STM ()
-withdraw acc amount = do 
-    bal <- readTVar acc
-    writeTVar acc (bal - amount) 
+    ~~~ {.haskell}
+    withdraw :: Account -> Int -> STM ()
+    withdraw acc amount = do 
+        bal <- readTVar acc
+        writeTVar acc (bal - amount) 
 
-deposit :: Account -> Int -> STM ()
-deposit acc amount = withdraw acc (-amount)
+    deposit :: Account -> Int -> STM ()
+    deposit acc amount = withdraw acc (-amount)
 
-transfer :: Account -> Account -> Int -> IO ()
-transfer to from amount = atomically (do 
-    withdraw from amount 
-    deposit to amount)
-~~~
+    transfer :: Account -> Account -> Int -> IO ()
+    transfer to from amount = atomically (do 
+        withdraw from amount 
+        deposit to amount)
+    ~~~
 
 * No deadlocks 
 * Easy to compose 
@@ -344,14 +344,14 @@ transfer to from amount = atomically (do
 
 * We have captured transaction in a monad. 
 
-~~~ {.haskell}
--- Transactions . lhs
--- | Transaction Datatype
-data FT a =
-    Done a |
-    ReadBlock BlockNumber ( ByteString -> FT a ) |
-    WriteBlock BlockNumber ByteString ( FT a )
-~~~
+    ~~~ {.haskell}
+    -- Transactions . lhs
+    -- | Transaction Datatype
+    data FT a =
+        Done a |
+        ReadBlock BlockNumber ( ByteString -> FT a ) |
+        WriteBlock BlockNumber ByteString ( FT a )
+    ~~~
 
 * Allow 2 operations. 
     * Read data from a block.
@@ -359,75 +359,75 @@ data FT a =
 
 * Monad Instance 
 
-~~~ {.haskell}
--- Transactions . lhs
--- | Monad Definition for the Transaction .
-instance Monad FT where
-    return = Done
-    m >>= f = case m of
-        Done a -> f a
-        ReadBlock bn c -> ReadBlock bn (\ i -> c i >>= f )
-        WriteBlock bn x c -> WriteBlock bn x ( c >>= f )
-~~~
+    ~~~ {.haskell}
+    -- Transactions . lhs
+    -- | Monad Definition for the Transaction .
+    instance Monad FT where
+        return = Done
+        m >>= f = case m of
+            Done a -> f a
+            ReadBlock bn c -> ReadBlock bn (\ i -> c i >>= f )
+            WriteBlock bn x c -> WriteBlock bn x ( c >>= f )
+    ~~~
 
 
 # Implementation Details (Cont)
 
 * Example Usage:
 
-~~~ {.haskell}
-deposit :: BlockNumber -> ByteString -> FT ()
-deposit a x = do 
-      amount <- ReadBlock a return 
-      WriteBlock a (amount + x) (return ())
-~~~
+    ~~~ {.haskell}
+    deposit :: BlockNumber -> ByteString -> FT ()
+    deposit a x = do 
+          amount <- ReadBlock a return 
+          WriteBlock a (amount + x) (return ())
+    ~~~
 
 * Explicit notation in terms of bind and return
 
-~~~ {.haskell}
- ReadBlock a return >>= (\amount -> WriteBlock a (amount +x) (return()))
- ReadBlock a (\i -> return i >>= \amount -> WriteBlock a (amount + x) (return()))
- ReadBlock a (\i -> Done i  >>= \amount -> WriteBlock a (amount + x) (return()))
- ReadBlock a (\i -> WriteBlock a (i + x) (return()))
-~~~
+    ~~~ {.haskell}
+     ReadBlock a return >>= (\amount -> WriteBlock a (amount +x) (return()))
+     ReadBlock a (\i -> return i >>= \amount -> WriteBlock a (amount + x) (return()))
+     ReadBlock a (\i -> Done i  >>= \amount -> WriteBlock a (amount + x) (return()))
+     ReadBlock a (\i -> WriteBlock a (i + x) (return()))
+    ~~~
 
 # Implementation Details (Cont)
 
 * Defining monad instance has 2 advantages
     * Type Checker prevents the user from performing any other IO operations. 
     
-    ~~~ {.haskell}
-    deposit :: BlockNumber -> ByteString -> FT ()
-    deposit a x = do 
-        amount <- ReadBlock a return 
-        print amount -- Not allowed by type checker 
-        WriteBlock a (amount + x) (return ())
-    ~~~
+        ~~~ {.haskell}
+        deposit :: BlockNumber -> ByteString -> FT ()
+        deposit a x = do 
+            amount <- ReadBlock a return 
+            print amount -- Not allowed by type checker 
+            WriteBlock a (amount + x) (return ())
+        ~~~
     
     * Easy composition 
 
-    ~~~ {.haskell}
-    transfer :: BlockNumber -> BlockNumber -> ByteString -> FT ()
-    transfer a b x = deposit a (-x) >> deposit b x
-    ~~~
+        ~~~ {.haskell}
+        transfer :: BlockNumber -> BlockNumber -> ByteString -> FT ()
+        transfer a b x = deposit a (-x) >> deposit b x
+        ~~~
 
-    ~~~ {.haskell}
-    transfer :: BlockNumber -> BlockNumber -> ByteString -> FT ()
-    transfer a b x = do 
-        deposit a (-x)
-        deposit b x
-    ~~~
+        ~~~ {.haskell}
+        transfer :: BlockNumber -> BlockNumber -> ByteString -> FT ()
+        transfer a b x = do 
+            deposit a (-x)
+            deposit b x
+        ~~~
 
 # Implementation Details (Cont)
 
 * Running a transaction 
 
-~~~ {.haskell}
-runTransaction :: FT a -> TFile -> IO a
-runTransaction (transfer a b 100)
-retryTransaction :: FT a -> TFile -> IO a
-retryTransaction (transfer a b 100)
-~~~
+    ~~~ {.haskell}
+    runTransaction :: FT a -> TFile -> IO a
+    runTransaction (transfer a b 100)
+    retryTransaction :: FT a -> TFile -> IO a
+    retryTransaction (transfer a b 100)
+    ~~~
 
 * runTransaction ensures all the properties of a transaction. 
 * Transaction may fail while using runTransaction. 
@@ -435,9 +435,9 @@ retryTransaction (transfer a b 100)
 * Too many Journals might result in poor read performance.
 * Sequencer copies the data to the main file and remove the intermediate journal files. 
 
-~~~ {.haskell}
-sequencer :: TFile -> IO () 
-~~~
+    ~~~ {.haskell}
+    sequencer :: TFile -> IO () 
+    ~~~
 
 # Testing 
 
@@ -445,31 +445,31 @@ sequencer :: TFile -> IO ()
 * QuickCheck : Tool for type based testing.
 * Invariants checked on random testcases generated from the function type. 
 
-~~~ {.haskell}
-qsort :: Ord a => [a] -> [a]
-qsort (x:xs) = qsort lhs ++ [x] ++ qsort rhs
-    where lhs = filter  (< x) xs
-          rhs = filter (>= x) xs
--- Quickcheck property to check 
-prop_sortcheck xs = qsort (qsort xs) == qsort xs
-~~~ 
+    ~~~ {.haskell}
+    qsort :: Ord a => [a] -> [a]
+    qsort (x:xs) = qsort lhs ++ [x] ++ qsort rhs
+        where lhs = filter  (< x) xs
+              rhs = filter (>= x) xs
+    -- Quickcheck property to check 
+    prop_sortcheck xs = qsort (qsort xs) == qsort xs
+    ~~~ 
 
-~~~ {.haskell}
-ghci> quickCheck (prop_sortcheck :: [Integer] -> Bool)
-*** Failed! Exception: 'qsort.hs:(3,1)-(5,32): Non-exhaustive patterns in function qsort' (after 1 test): 
-[]
-~~~ 
+    ~~~ {.haskell}
+    ghci> quickCheck (prop_sortcheck :: [Integer] -> Bool)
+    *** Failed! Exception: 'qsort.hs:(3,1)-(5,32): Non-exhaustive patterns in function qsort' (after 1 test): 
+    []
+    ~~~ 
 
 * Correcting the code 
 
-~~~ {.haskell}
-qsort [] = []
-~~~ 
+    ~~~ {.haskell}
+    qsort [] = []
+    ~~~ 
 
-~~~ {.haskell}
-ghci> quickCheck (prop_sortcheck :: [Integer] -> Bool)
-+++ OK, passed 100 tests.
-~~~
+    ~~~ {.haskell}
+    ghci> quickCheck (prop_sortcheck :: [Integer] -> Bool)
+    +++ OK, passed 100 tests.
+    ~~~
 
 # Testing (Cont)
 
@@ -479,66 +479,66 @@ ghci> quickCheck (prop_sortcheck :: [Integer] -> Bool)
 * Different types for actual code and testing code. 
 * Type Classes.
 
-~~~ {.haskell}
--- Backend.hs
-class (Show a,Monad m) => Backend b m a | b -> m where 
-    data Handle :: * -> * 
-    type BlockNumber :: *  
-    open :: FilePath -> Mode -> m (Handle b)
-    close :: Handle b -> m () 
-    readBlock ::(Eq BlockNumber)=>Handle b->BlockNumber->m a 
-    writeBlock ::(Eq BlockNumber)=>Handle b->BlockNumber->a->m ()
-    sync :: Handle b -> m ()
-~~~ 
+    ~~~ {.haskell}
+    -- Backend.hs
+    class (Show a,Monad m) => Backend b m a | b -> m where 
+        data Handle :: * -> * 
+        type BlockNumber :: *  
+        open :: FilePath -> Mode -> m (Handle b)
+        close :: Handle b -> m () 
+        readBlock ::(Eq BlockNumber)=>Handle b->BlockNumber->m a 
+        writeBlock ::(Eq BlockNumber)=>Handle b->BlockNumber->a->m ()
+        sync :: Handle b -> m ()
+    ~~~ 
 
 # Testing (Cont)
 
 * File System being simulated in memory.
 
-~~~ {.haskell}
--- Backend.hs
-data TestDisk a = TestDisk {
-    disk :: M.Map FilePath (File a)
-   , buffers :: M.Map FilePath (File a) 
-   , bufferSize :: Int -- Current buffer Size 
-   , openFiles :: M.Map FilePath Mode
-    } deriving (Eq,Show)
-data File a = File {
-    blocks :: M.Map Int a 
-   , size :: Int 
-    } deriving (Eq, Show)
-
-data Mode = ReadWrite | Read | Write deriving (Eq,Show) 
-~~~ 
+    ~~~ {.haskell}
+    -- Backend.hs
+    data TestDisk a = TestDisk {
+        disk :: M.Map FilePath (File a)
+       , buffers :: M.Map FilePath (File a) 
+       , bufferSize :: Int -- Current buffer Size 
+       , openFiles :: M.Map FilePath Mode
+        } deriving (Eq,Show)
+    data File a = File {
+        blocks :: M.Map Int a 
+       , size :: Int 
+        } deriving (Eq, Show)
+    
+    data Mode = ReadWrite | Read | Write deriving (Eq,Show) 
+    ~~~ 
 
 
 # Testing (Cont)
 
 * Instance of the Backend Class . Pure and no side effects. 
 
-~~~ {.haskell}
-instance Show a => Backend (TestDisk a)  (State (TestDisk a)) a where 
-    data Handle (TestDisk a) = Handle FilePath 
-    type BlockNumber = Int 
-    open fp m = do 
-        disk <- get
-        put $ openFile disk fp m 
-        return $ Handle fp
-    close (Handle fp) = do 
-        disk <- get 
-        put $ closeFile disk fp
-    readBlock (Handle fp) bn = do 
-        t <- get 
-        case readB t fp bn buffers of 
-            Nothing -> error "Block Not Found"
-            Just a -> return a
-    writeBlock (Handle fp) bn a = do 
-        t <- get 
-        put $ writeB t fp bn a 
-    sync (Handle fp) = do  
-        t <- get 
-        put $ flushBuffer t fp
-~~~
+    ~~~ {.haskell}
+    instance Show a => Backend (TestDisk a)  (State (TestDisk a)) a where 
+        data Handle (TestDisk a) = Handle FilePath 
+        type BlockNumber = Int 
+        open fp m = do 
+            disk <- get
+            put $ openFile disk fp m 
+            return $ Handle fp
+        close (Handle fp) = do 
+            disk <- get 
+            put $ closeFile disk fp
+        readBlock (Handle fp) bn = do 
+            t <- get 
+            case readB t fp bn buffers of 
+                Nothing -> error "Block Not Found"
+                Just a -> return a
+        writeBlock (Handle fp) bn a = do 
+            t <- get 
+            put $ writeB t fp bn a 
+        sync (Handle fp) = do  
+            t <- get 
+            put $ flushBuffer t fp
+    ~~~
 
 
 
