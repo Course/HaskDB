@@ -167,20 +167,7 @@ WriteBlock simply writes the block data to its own journal file. It might latter
 
 When a transaction needs to commit , it first checks whether there is a conflict between the blocks that it read and the blocks changed between the file version when it started and the current file version. If a conflict exists , the transaction must abort. If there are no such conflicts and it was a read only transaction then it commits successfully. Whereas,  in case of a read-write transaction , it adds its journal to the journal queue with the incremented file version. It also increments the file version of the main database file. It flushes the required buffers so that the data gets actually written to the disk to guarantee durability.
 
-\begin{figure}[htb]
-\centering
-\includegraphics[angle=90]{1}
-\end{figure}
 
-\begin{figure}[htb]
-\centering
-\includegraphics[angle=90]{2}
-\end{figure}
-
-\begin{figure}[htb]
-\centering
-\includegraphics[angle=90]{2}
-\end{figure}
 
 
 \subsection{Acid Guarantees}
@@ -442,5 +429,33 @@ This was a very basic structure of file system which we will be using to write t
 \begin{thebibliography}{10}
 \bibitem[1]{stm}Anthony Discolo, Tim Harris, Simon Marlow, Simon Peyton Jones, and Satnam Singh. Lock-free data structures using STMs in Haskell. In Eighth International Symposium on Functional and Logic Programming (FLOPS’06), April 2006.
 \bibitem[2]{sqlite}Atomic Commit in sqlite, \url{http://www.sqlite.org/atomiccommit.html}
+\bibitem[3]{bloomfilter}Bloom Filter, \url{http://en.wikipedia.org/wiki/Bloom_filter}
+\bibitem[4]{WAL}Write-Ahead Logging, \url{http://www.sqlite.org/draft/wal.html}
 \end{thebibliography}
+
+\pagebreak
+
+
+
+\begin{figure}[htb]
+\centering
+\includegraphics[angle=90]{1}
+\end{figure}
+
+\pagebreak
+
+\begin{figure}[htb]
+\centering
+\includegraphics[angle=90]{2}
+\end{figure}
+
+\pagebreak
+
+\begin{figure}[htb]
+\centering
+\includegraphics[angle=90]{2}
+\end{figure}
+
+\pagebreak
+
 \end{document}
