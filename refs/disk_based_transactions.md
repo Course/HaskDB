@@ -327,7 +327,7 @@ equivalent
 * **Consistency**
     * The set of *valid logs* + transaction file is always consistent
 * **Isolation** 
-    * In case it sees the effect of another transaction , it *surely* fails 
+    * A transaction cannot see the effects of other running transactions
 * **Durability**
     * Once a transaction commits , fsync must ensure that the data is actually written onto the disk.
 

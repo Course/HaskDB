@@ -132,7 +132,13 @@ Hence such a model is good for heavy read-based applications but inefficient whe
 
 \section{Algorithm}
 
-1. Simplified version
+\subsection{Simplified version}
+
+We ignore operations other than read and write instructions. We assume that transactions may perform arbitrary computations on data in local buffers in between reads and writes. Our simplified schedules consist of only read and write instructions.
+
+Any transaction has access to following three operations : readblock, writeblock and checkpoint.
+
+
 
 \subsection{Hardware Assumptions} FT does not assume that sector writes are atomic . Even though newer disk storage systems guarantee sector writes as atomic using miniature battery based power supply just after a power failure , FT follows a pessimistic approach and assumes that no such facility might be provided by the underlying hardware.
 
@@ -142,45 +148,58 @@ FT assumes that the detection and/or correction of bit errors caused by cosmic r
 
 By default, FT assumes that an operating system call to write a range of bytes will not damage or alter any bytes outside of that range even if a power lose or OS crash occurs during that write. 
 
+\subsection{Commit Workflow}
+For maintaining the transaction information and efficient execution of concurrent transactions , we utilize concepts like write ahead logging (WAL) in SQlite, bloomfilters, serializability, etc.
+
+We use bloomfilters to find out rapidly and memory-efficiently, whether a block is present in a journal or not.
+A Bloom filter is a space-efficient probabilistic data structure that is used to test whether an element is a member of a set. False positives are possible, but false negatives are not; i.e. a query returns either "inside set (may be wrong)" or "definitely not in set".
+Every journal has a corresponding bloomfilter. Bloomfilters instead of indexes are kept in memory to keep memory requirements low and provide good read performance at the same time.
+Bloomfilter keeps track of the list of blocks in a journal file.
+
+We store a global queue of committed(valid) journals.
+
+If a transaction is purely read-based , it need not keep any journal. 
+If the transaction is in ReadWrite Mode , it will have its own journal. 
+
+ReadBlock first tries reading from its own journal if it exists. Then it tries to read from the queue of commited journals. It doesnt actually need to perform I/O on every journal to find the block. It checks the bloomfilter associated with each journal and if bloomfilter reports true , it actually performs I/O to find out if it is true. As a side note, it is obvious that the goal is to minimize the false rate positive of bloomfilter so that such costly disk accesses can be minimized. Proper real time benchmarking and fine-tuning of bloom filter parameters can reduce false-positive rate and optimize the performance. If it really finds the block , then it fetches the data from the disk and returns it. If the bloomfilter had signalled a false-positive , it needs to continue its search further down the queue recursively. If the queue is fully traversed and the block is not found , it finally reads from the main database file. 
+ 
+WriteBlock simply writes the block data to its own journal file. It might latter fail to commit if there are conflicts. This is discussed below.
+
+When a transaction needs to commit , it first checks whether there is a conflict between the blocks that it read and the blocks changed between the file version when it started and the current file version. If a conflict exists , the transaction must abort. If there are no such conflicts and it was a read only transaction then it commits successfully. Whereas,  in case of a read-write transaction , it adds its journal to the journal queue with the incremented file version. It also increments the file version of the main database file. It flushes the required buffers so that the data gets actually written to the disk to guarantee durability.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[angle=90]{1}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[angle=90]{2}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[angle=90]{2}
+\end{figure}
 
 
-3. read/write block 
-
-. data structures for book-keeping
-
-commit workflow
-
-correctness of abort/commit
-
-bloom filter metrics
-
-4. acid guarantees
-
-5. sequencer and cleaner
-
-
-Any transaction has access to three operations :
+\subsection{Acid Guarantees}
 \begin{itemize}
-\item readblock
-\item writeblock 
-\item checkpoint
+\item Atomicity: 
+    Transaction either commits or aborts.
+\item Consistency: 
+    The set of valid journals and transaction file is always consistent
+\item Isolation: 
+	Since the journal of a concurrently running transaction is not yet valid(as it is not yet committed) , the journal must not be in the global journal queue. Hence , a concurrent transaction can never see the change made by another running transaction.
+\item Durability: 
+    Once a transaction commits , fsync must ensure that the data is actually written onto the disk. Hence assuming our calls to fsync are always called at the appropriate time , the burden of durability rests on the fsync system call correctness in the host operating system.
 \end{itemize}
 
+\subsection{Sequencer}
+If there are large number of transactions executing concurrently , the number of journals can grow large extremely fast. There is a need to keep the number of journals in control else it would lead to extremely bad read performance. A checkpoint operation transfers all the data in journal files to the main database file. Hence , frequent checkpointing would reduce the overhead of read operations.
 
-When a write operation is performed , the change is stored in a separate journal file per transaction.When a read operation is performed , it reads from the latest file which contains the block data.
-
-Committing a transaction increments the file version of the transaction file and marks its own journal file as valid.
-
-The set of all valid journal files and the main transaction file together represent the current state of the database at any given point of time.
-
-Transaction would fail/abort when the readblocks of the current transaction conflict with the blocks changed between the start of the current transaction and current version.
-
-Write operations always go through without any waiting period and hence they are optimal.
-The time complexity of read operation is proportional to the number of journal files on disk.
-
-Checkpointing transfers all the data in journal files to the main database file. Hence , frequent checkpointing would improve the overhead of read operations.
-
-There is a tradeoff between average read performance and average write performance. To maximize the read performance, one wants to keep the number of journal files as small as possible and hence run checkpoints frequently. To maximize write performance, one wants to amortize the cost of each checkpoint over as many writes as possible, meaning that one wants to run checkpoints infrequently and let the no of journal files grow as large as possible before each checkpoint. The decision of how often to run checkpoints may therefore vary from one application to another depending on the relative read and write performance requirements of the application.
+\subsection{Read-write Trade-off}
+There is a trade-off between average read performance and average write performance. To maximize the read performance, one wants to keep the number of journal files as small as possible and hence run checkpoints frequently. To maximize write performance, one wants to amortize the cost of each checkpoint over as many writes as possible, meaning that one wants to run checkpoints infrequently and let the no of journal files grow as large as possible before each checkpoint. The decision of how often to run checkpoints may therefore vary from one application to another depending on the relative read and write performance requirements of the application.
 
 
 
